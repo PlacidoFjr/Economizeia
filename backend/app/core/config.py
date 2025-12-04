@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+import json
 
 
 class Settings(BaseSettings):
@@ -58,8 +59,31 @@ class Settings(BaseSettings):
     DATA_RETENTION_DAYS: int = 365
     MASK_SENSITIVE_DATA: bool = True
     
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS - aceita JSON ou string separada por vírgula
+    CORS_ORIGINS: str = '["http://localhost:3000", "http://localhost:5173"]'
+    
+    def get_cors_origins(self) -> List[str]:
+        """Parse CORS_ORIGINS from JSON string or comma-separated string."""
+        if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == "":
+            return ["http://localhost:3000", "http://localhost:5173"]
+        
+        try:
+            # Tentar fazer parse do JSON
+            parsed = json.loads(self.CORS_ORIGINS)
+            if isinstance(parsed, list):
+                return parsed
+            elif isinstance(parsed, str):
+                # Se for string única, retornar como lista
+                return [parsed]
+        except (json.JSONDecodeError, ValueError):
+            # Se não for JSON, tentar split por vírgula
+            try:
+                origins = [origin.strip().strip('"').strip("'") for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+                return origins if origins else ["http://localhost:3000", "http://localhost:5173"]
+            except:
+                return ["http://localhost:3000", "http://localhost:5173"]
+        
+        return ["http://localhost:3000", "http://localhost:5173"]
     
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
