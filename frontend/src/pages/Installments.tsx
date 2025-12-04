@@ -1,7 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
-import { Calendar, DollarSign, FileText, Plus, CreditCard } from 'lucide-react'
+import { FileText, Plus, CreditCard } from 'lucide-react'
 import { useState } from 'react'
 import { translateStatus } from '../utils/translations'
 

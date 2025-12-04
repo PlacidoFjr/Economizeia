@@ -10,7 +10,7 @@ export default function BillDetail() {
   const navigate = useNavigate()
   const [showSchedule, setShowSchedule] = useState(false)
   const [scheduledDate, setScheduledDate] = useState('')
-  const [notifyDays, setNotifyDays] = useState([7, 3, 1])
+  const [notifyDays] = useState([7, 3, 1])
 
   const { data: bill, isLoading } = useQuery({
     queryKey: ['bill', id],
