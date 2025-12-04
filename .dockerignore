@@ -40,3 +40,40 @@ celerybeat-schedule
 frontend/
 logo/
 
+# Arquivos grandes e desnecessários
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.pdf
+*.mp4
+*.avi
+*.mov
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.ico
+*.svg
+node_modules/
+.npm/
+.yarn/
+package-lock.json
+yarn.lock
+
+# Arquivos de backup
+*.bak
+*.backup
+*~
+*.swp
+*.swo
+
+# Arquivos temporários
+tmp/
+temp/
+*.tmp
+*.log
+*.cache
+
