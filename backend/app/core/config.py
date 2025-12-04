@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.0-flash"  # Modelo rápido do Gemini (mais rápido e disponível)
     
     # MinIO / S3
+    MINIO_ENABLED: bool = False  # Desabilitado por padrão (não quebra se MinIO não estiver disponível)
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin123"
