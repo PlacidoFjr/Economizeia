@@ -1,0 +1,12 @@
+# Railway Configuration
+# Este arquivo indica ao Railway para usar o Dockerfile do backend
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "backend/Dockerfile"
+context = "backend"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
