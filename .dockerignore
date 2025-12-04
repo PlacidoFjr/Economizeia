@@ -1,0 +1,42 @@
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+.venv
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# Docs
+*.md
+docs/
+
+# Other
+tests/
+scripts/
+celerybeat-schedule
+.DS_Store
+.vscode/
+.idea/
+
+# Frontend (não copiar para o backend)
+frontend/
+logo/
+

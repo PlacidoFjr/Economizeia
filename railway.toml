@@ -1,10 +1,11 @@
 # Railway Configuration
 # Este arquivo indica ao Railway para usar o Dockerfile do backend
+# O contexto é a raiz do projeto, então o Dockerfile precisa copiar de backend/
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "backend/Dockerfile"
-context = "backend"
+# Context é a raiz do projeto (não backend/)
 
 [deploy]
 restartPolicyType = "ON_FAILURE"

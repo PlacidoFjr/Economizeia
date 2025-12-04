@@ -10,15 +10,15 @@ RUN apt-get update && apt-get install -y \
     libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
+# Copy requirements from backend directory
+COPY backend/requirements.txt ./requirements.txt
 
 # Install Python dependencies
 # Aumentar timeout e usar retry para problemas de rede
 RUN pip install --no-cache-dir --default-timeout=100 --retries=5 -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy application code from backend directory
+COPY backend/ ./
 
 # Expose port (Railway usa variável PORT, mas mantemos 8000 como padrão)
 EXPOSE ${PORT:-8000}
