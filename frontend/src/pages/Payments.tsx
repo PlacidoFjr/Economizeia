@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
-import { Calendar, CheckCircle, Clock, CreditCard } from 'lucide-react'
+import { Calendar, CheckCircle, Clock } from 'lucide-react'
 import { translateStatus, translatePaymentMethod } from '../utils/translations'
 
 export default function Payments() {

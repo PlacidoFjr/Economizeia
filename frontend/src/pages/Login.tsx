@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../hooks/useToast'
-import { X, Shield, TrendingUp, Zap, Mail, Lock, Calendar } from 'lucide-react'
+import { Shield, TrendingUp, Zap, Mail, Lock } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 // Dados de exemplo para os gráficos
@@ -163,8 +163,6 @@ export default function Login() {
                   isAnimationActive={true}
                   animationBegin={0}
                   animationDuration={800}
-                  activeIndex={undefined}
-                  activeShape={null}
                 >
                   {featuresData.map((entry, index) => (
                     <Cell 

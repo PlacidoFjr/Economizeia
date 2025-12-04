@@ -1,7 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
-import { FileText, Plus, CreditCard } from 'lucide-react'
+import { Plus, CreditCard } from 'lucide-react'
 import { useState } from 'react'
 import { translateStatus } from '../utils/translations'
 
@@ -17,7 +17,6 @@ interface InstallmentGroup {
 
 export default function Installments() {
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const queryClient = useQueryClient()
 
   const { data: bills, isLoading } = useQuery({
     queryKey: ['bills'],

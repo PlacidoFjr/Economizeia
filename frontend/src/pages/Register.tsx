@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../hooks/useToast'
-import { X, Shield, TrendingUp, Zap, User, Mail, Lock, CheckCircle } from 'lucide-react'
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { Shield, TrendingUp, Zap, User, Mail, Lock, CheckCircle } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 // Dados de exemplo para os gráficos
 const growthData = [
@@ -172,8 +172,6 @@ export default function Register() {
                   isAnimationActive={true}
                   animationBegin={0}
                   animationDuration={800}
-                  activeIndex={undefined}
-                  activeShape={null}
                 >
                   {featuresData.map((entry, index) => (
                     <Cell 

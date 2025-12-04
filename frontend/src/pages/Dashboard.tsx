@@ -28,13 +28,13 @@ export default function Dashboard() {
     },
   })
 
-  const { data: payments } = useQuery({
-    queryKey: ['payments'],
-    queryFn: async () => {
-      const response = await api.get('/payments')
-      return response.data
-    },
-  })
+  // const { data: payments } = useQuery({
+  //   queryKey: ['payments'],
+  //   queryFn: async () => {
+  //     const response = await api.get('/payments')
+  //     return response.data
+  //   },
+  // })
 
   // Processamento de dados
   const now = new Date()
@@ -261,7 +261,11 @@ export default function Dashboard() {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }: { name: string; percent?: number }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                    label={(props: any) => {
+                      if (!props || !props.name) return '';
+                      const percent = props.percent || 0;
+                      return `${props.name} ${(percent * 100).toFixed(0)}%`;
+                    }}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"

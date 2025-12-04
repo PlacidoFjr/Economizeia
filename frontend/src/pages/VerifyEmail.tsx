@@ -6,7 +6,7 @@ import { CheckCircle, XCircle, Mail, ArrowLeft } from 'lucide-react'
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [token, setToken] = useState<string | null>(null)
+  const [, setToken] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
