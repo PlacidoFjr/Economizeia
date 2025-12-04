@@ -20,9 +20,10 @@ RUN pip install --no-cache-dir --default-timeout=100 --retries=5 -r requirements
 # Copy application code
 COPY . .
 
-# Expose port
-EXPOSE 8000
+# Expose port (Railway usa variável PORT, mas mantemos 8000 como padrão)
+EXPOSE ${PORT:-8000}
 
-# Default command
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Default command (Railway injeta PORT automaticamente via variável de ambiente)
+# Se PORT não estiver definida, usa 8000 como padrão
+CMD sh -c "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"
 
