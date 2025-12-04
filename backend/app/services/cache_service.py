@@ -13,28 +13,23 @@ class CacheService:
     
     def __init__(self):
         try:
-            # Parse Redis URL
+            # Use redis.from_url() which properly parses Redis URLs
+            # Handles formats like: redis://default:password@host:port/db
             redis_url = settings.REDIS_URL
-            if redis_url.startswith("redis://"):
-                # Remove redis:// prefix and parse
-                parts = redis_url.replace("redis://", "").split("/")
-                host_port = parts[0].split(":")
-                host = host_port[0] if len(host_port) > 0 else "localhost"
-                port = int(host_port[1]) if len(host_port) > 1 else 6379
-                db = int(parts[1]) if len(parts) > 1 else 0
-            else:
-                host = "localhost"
-                port = 6380
-                db = 0
             
-            self.redis_client = redis.Redis(
-                host=host,
-                port=port,
-                db=db,
+            # If URL doesn't start with redis://, add it
+            if not redis_url.startswith(("redis://", "rediss://")):
+                redis_url = f"redis://{redis_url}"
+            
+            # Parse and create Redis client from URL
+            # This handles passwords, ports, and database numbers correctly
+            self.redis_client = redis.from_url(
+                redis_url,
                 decode_responses=True,
                 socket_connect_timeout=2,
                 socket_timeout=2
             )
+            
             # Test connection
             self.redis_client.ping()
             self.enabled = True
