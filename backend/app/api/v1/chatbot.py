@@ -1,0 +1,340 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
+from typing import Optional, List, Dict
+from sqlalchemy.orm import Session
+from datetime import date, datetime
+import uuid
+import logging
+
+from app.db.database import get_db
+from app.db.models import User, Bill, BillStatus, BillType
+from app.api.dependencies import get_current_user
+from app.services.ollama_service import ollama_service
+from app.services.gemini_service import get_gemini_service
+from app.services.cache_service import cache_service
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+router = APIRouter()
+
+
+class ChatMessage(BaseModel):
+    message: str
+    conversation_history: Optional[List[Dict]] = None
+
+
+class ChatResponse(BaseModel):
+    response: str
+    action: Optional[str] = None
+    bill_id: Optional[str] = None
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat_with_assistant(
+    chat_data: ChatMessage,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Chat with the AI assistant powered by Gemini (se configurado) ou Ollama.
+    Can also create expenses/bills from natural language commands.
+    """
+    try:
+        # Verificar se deve usar Gemini ou Ollama
+        gemini_service = get_gemini_service()
+        ai_service = gemini_service if gemini_service else ollama_service
+        
+        # Primeiro, tentar extrair informações de criação de despesa
+        expense_data = await ai_service.extract_expense_from_message(chat_data.message)
+        
+        if expense_data and expense_data.get("action") == "create_expense":
+            # Criar despesa/boleto
+            try:
+                # Validar dados mínimos
+                if not expense_data.get("amount") or expense_data.get("amount") <= 0:
+                    return ChatResponse(
+                        response="Não consegui identificar o valor da despesa. Por favor, informe o valor. Exemplo: 'Adicionar despesa de R$ 150,50'",
+                        action="error"
+                    )
+                
+                # Processar data de vencimento
+                due_date = date.today()
+                if expense_data.get("due_date"):
+                    try:
+                        # Tentar parsear a data
+                        if isinstance(expense_data["due_date"], str):
+                            due_date = datetime.fromisoformat(expense_data["due_date"]).date()
+                        else:
+                            due_date = date.today()
+                    except:
+                        due_date = date.today()
+                
+                # Criar boleto/despesa
+                bill = Bill(
+                    id=uuid.uuid4(),
+                    user_id=current_user.id,
+                    issuer=expense_data.get("issuer") or "Despesa Manual",
+                    amount=float(expense_data.get("amount", 0)),
+                    currency="BRL",
+                    due_date=due_date,
+                    status=BillStatus.CONFIRMED,
+                    confidence=0.9,
+                    category=expense_data.get("category")
+                )
+                
+                db.add(bill)
+                db.commit()
+                db.refresh(bill)
+                
+                # Preparar resposta
+                issuer_text = f" de {bill.issuer}" if bill.issuer != "Despesa Manual" else ""
+                date_text = f" com vencimento em {bill.due_date.strftime('%d/%m/%Y')}" if bill.due_date else ""
+                
+                response_text = f"✅ Despesa criada com sucesso!{issuer_text} no valor de R$ {bill.amount:.2f}{date_text}."
+                
+                if expense_data.get("is_installment"):
+                    response_text += f" Esta é a parcela {expense_data.get('installment_current', 1)} de {expense_data.get('installment_total', 1)}."
+                
+                return ChatResponse(
+                    response=response_text,
+                    action="expense_created",
+                    bill_id=str(bill.id)
+                )
+                
+            except Exception as e:
+                logger.error(f"Error creating expense from chat: {e}")
+                return ChatResponse(
+                    response=f"Desculpe, ocorreu um erro ao criar a despesa: {str(e)}",
+                    action="error"
+                )
+        
+        # Se não for comando de criação, processar como chat normal
+        # Verificar cache primeiro (apenas para mensagens simples ou sem contexto crítico)
+        message_lower = chat_data.message.lower().strip()
+        is_simple_query = cache_service._is_simple_message(chat_data.message)
+        
+        # Para mensagens simples, tentar cache antes de buscar dados
+        if is_simple_query:
+            cached_response = cache_service.get_cached_response(str(current_user.id), chat_data.message)
+            if cached_response:
+                logger.info(f"Cache hit for simple message from user {current_user.id}")
+                return ChatResponse(response=cached_response, action="chat")
+        
+        user_bills = db.query(Bill).filter(Bill.user_id == current_user.id).all()
+        
+        pending_bills = [b for b in user_bills if b.status in [BillStatus.PENDING, BillStatus.CONFIRMED]]
+        confirmed_bills = [b for b in user_bills if b.status == BillStatus.CONFIRMED]
+        scheduled_bills = [b for b in user_bills if b.status == BillStatus.SCHEDULED]
+        paid_bills = [b for b in user_bills if b.status == BillStatus.PAID]
+        
+        today = date.today()
+        overdue_bills = [b for b in user_bills if b.due_date and b.due_date < today and b.status != BillStatus.PAID]
+        
+        total_pending = sum(b.amount for b in pending_bills if b.amount) or 0.0
+        total_paid = sum(b.amount for b in paid_bills if b.amount) or 0.0
+        
+        # Calcular receitas e despesas do mês atual
+        current_month = today.month
+        current_year = today.year
+        monthly_expenses = sum(
+            b.amount for b in user_bills 
+            if b.due_date and b.due_date.month == current_month and b.due_date.year == current_year
+            and b.type == BillType.EXPENSE and b.status in [BillStatus.PAID, BillStatus.CONFIRMED]
+        ) or 0.0
+        monthly_income = sum(
+            b.amount for b in user_bills 
+            if b.due_date and b.due_date.month == current_month and b.due_date.year == current_year
+            and b.type == BillType.INCOME and b.status in [BillStatus.PAID, BillStatus.CONFIRMED]
+        ) or 0.0
+        monthly_balance = monthly_income - monthly_expenses
+        
+        # Agrupar por categoria com detalhes
+        categories = {}
+        for bill in user_bills:
+            cat = bill.category or "outras"
+            if cat not in categories:
+                categories[cat] = {"total": 0.0, "count": 0, "bills": []}
+            categories[cat]["total"] += (bill.amount or 0)
+            categories[cat]["count"] += 1
+            if len(categories[cat]["bills"]) < 5:  # Limitar a 5 boletos por categoria
+                categories[cat]["bills"].append({
+                    "issuer": bill.issuer,
+                    "amount": bill.amount,
+                    "due_date": bill.due_date.isoformat() if bill.due_date else None,
+                    "status": bill.status.value
+                })
+        
+        # Top emissores com detalhes
+        issuers = {}
+        for bill in user_bills:
+            issuer = bill.issuer or "Desconhecido"
+            if issuer not in issuers:
+                issuers[issuer] = {"total": 0.0, "count": 0, "bills": []}
+            issuers[issuer]["total"] += (bill.amount or 0)
+            issuers[issuer]["count"] += 1
+            if len(issuers[issuer]["bills"]) < 3:  # Limitar a 3 boletos por emissor
+                issuers[issuer]["bills"].append({
+                    "amount": bill.amount,
+                    "due_date": bill.due_date.isoformat() if bill.due_date else None,
+                    "status": bill.status.value,
+                    "category": bill.category
+                })
+        
+        # Lista detalhada de boletos pendentes (próximos 10)
+        next_bills = sorted(
+            [b for b in pending_bills if b.due_date],
+            key=lambda x: x.due_date or date.max
+        )[:10]
+        
+        # Lista detalhada de boletos vencidos
+        overdue_details = [
+            {
+                "issuer": b.issuer,
+                "amount": b.amount,
+                "due_date": b.due_date.isoformat() if b.due_date else None,
+                "days_overdue": (today - b.due_date).days if b.due_date else 0
+            }
+            for b in overdue_bills
+        ]
+        
+        context = {
+            "user_name": current_user.name,
+            "total_bills": len(user_bills),
+            "pending_bills": len(pending_bills),
+            "confirmed_bills": len(confirmed_bills),
+            "scheduled_bills": len(scheduled_bills),
+            "paid_bills": len(paid_bills),
+            "overdue_bills": len(overdue_bills),
+            "total_pending": total_pending,
+            "total_paid": total_paid,
+            "monthly_expenses": monthly_expenses,
+            "monthly_income": monthly_income,
+            "monthly_balance": monthly_balance,
+            "current_month": f"{current_month}/{current_year}",
+            "categories": categories,
+            "top_issuers": dict(sorted(issuers.items(), key=lambda x: x[1]["total"], reverse=True)[:5]),
+            "next_bills": [
+                {
+                    "issuer": b.issuer,
+                    "amount": b.amount,
+                    "due_date": b.due_date.isoformat() if b.due_date else None,
+                    "days_until": (b.due_date - today).days if b.due_date else None,
+                    "category": b.category
+                }
+                for b in next_bills
+            ],
+            "overdue_details": overdue_details,
+        }
+        
+        # Verificar cache com contexto (para mensagens mais complexas)
+        if not is_simple_query:
+            context_hash = cache_service.get_context_hash(context)
+            cached_response = cache_service.get_cached_response(
+                str(current_user.id), 
+                chat_data.message, 
+                context_hash
+            )
+            if cached_response:
+                logger.info(f"Cache hit for contextual message from user {current_user.id}")
+                return ChatResponse(response=cached_response, action="chat")
+        
+        # Chamar AI service (Gemini ou Ollama) para gerar resposta
+        try:
+            response_text = await ai_service.chat(
+                message=chat_data.message,
+                context=context,
+                conversation_history=chat_data.conversation_history or []
+            )
+            
+            # Cachear a resposta apenas se não for erro
+            if response_text and not response_text.startswith("⚠️") and not response_text.startswith("❌"):
+                if is_simple_query:
+                    # Mensagens simples: cache por 1 hora
+                    cache_service.set_cached_response(
+                        str(current_user.id),
+                        chat_data.message,
+                        response_text,
+                        ttl=3600
+                    )
+                else:
+                    # Mensagens contextuais: cache por 5 minutos com hash do contexto
+                    context_hash = cache_service.get_context_hash(context)
+                    cache_service.set_cached_response(
+                        str(current_user.id),
+                        chat_data.message,
+                        response_text,
+                        context_hash=context_hash,
+                        ttl=300
+                    )
+        except Exception as ai_error:
+            logger.error(f"AI service error ({'Gemini' if gemini_service else 'Ollama'}): {ai_error}", exc_info=True)
+            
+            # Mensagem de erro mais específica baseada no tipo de erro
+            error_str = str(ai_error).lower()
+            service_name = "Gemini" if gemini_service else "Ollama"
+            if "connect" in error_str or "refused" in error_str or "api" in error_str:
+                if gemini_service:
+                    response_text = f"""⚠️ Erro ao conectar com {service_name}.
+
+**Para resolver:**
+1. Verifique se a GEMINI_API_KEY está correta no .env
+2. Verifique sua conexão com a internet
+3. Verifique os limites da API do Google
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário"""
+                else:
+                    response_text = f"""⚠️ O servidor de IA ({service_name}) não está disponível.
+
+**Para resolver:**
+1. Verifique se o Ollama está rodando na porta 11434
+2. Se não estiver, instale e inicie o Ollama
+3. Baixe o modelo: `ollama pull llama3.2`
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário
+
+Tente novamente após iniciar o Ollama."""
+            elif "timeout" in error_str:
+                response_text = """⏱️ O servidor de IA está demorando para responder.
+
+Mas posso ajudá-lo com informações rápidas:
+
+📄 **Upload de Boletos**: Acesse "Boletos" > "Upload"
+📊 **Dashboard**: Veja seus gastos e receitas
+🔔 **Lembretes**: Configure notificações antes dos vencimentos
+🤖 **Adicionar Despesa**: Digite "Adicionar despesa de R$ 150,50 para energia"
+
+Tente novamente em alguns instantes ou use as funcionalidades do menu."""
+            else:
+                # Resposta de fallback genérica
+                response_text = f"""⚠️ Erro ao conectar com o servidor de IA ({service_name}): {str(ai_error)[:100]}
+
+**O que posso fazer:**
+• Ajudar você a entender como usar o sistema
+• Explicar funcionalidades do EconomizeIA
+• Orientar sobre upload de boletos
+• Explicar como agendar pagamentos
+
+**Para adicionar despesas via chat:**
+Use comandos como:
+• "Adicionar despesa de R$ 150,50 para energia elétrica"
+• "Criar boleto de R$ 300,00 vencendo em 15/12/2024"
+
+Por favor, verifique a configuração e tente novamente em alguns instantes."""
+        
+        return ChatResponse(response=response_text, action="chat")
+        
+    except Exception as e:
+        logger.error(f"Error in chat endpoint: {e}")
+        return ChatResponse(
+            response="Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.",
+            action="error"
+        )
+

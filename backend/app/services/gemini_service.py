@@ -1,0 +1,194 @@
+import json
+import logging
+from typing import Dict, Optional, Any, List
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# Import condicional do Gemini
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+
+
+class GeminiService:
+    """Service for interacting with Google Gemini API for chat and extraction."""
+    
+    def __init__(self):
+        if not settings.GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY não configurada. Configure no .env")
+        
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+        self.timeout = 10.0  # Gemini é muito rápido, 10s é suficiente
+    
+    async def chat(
+        self, 
+        message: str, 
+        context: Dict = None, 
+        conversation_history: List[Dict] = None
+    ) -> str:
+        """
+        Chat with Gemini using user context and conversation history.
+        """
+        try:
+            # Construir prompt com contexto
+            system_prompt = self._build_system_prompt(context)
+            user_prompt = self._build_user_prompt(message, conversation_history)
+            
+            # Preparar histórico da conversa para Gemini
+            chat_history = []
+            if conversation_history:
+                for msg in conversation_history[-10:]:  # Últimas 10 mensagens
+                    role = "user" if msg.get("sender") == "user" else "model"
+                    chat_history.append({
+                        "role": role,
+                        "parts": [msg.get("text", "")]
+                    })
+            
+            # Criar chat com histórico
+            chat = self.model.start_chat(history=chat_history)
+            
+            # Enviar mensagem completa
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            response = chat.send_message(full_prompt)
+            
+            return response.text
+            
+        except Exception as e:
+            logger.error(f"Erro ao chamar Gemini: {e}", exc_info=True)
+            raise
+    
+    def _build_system_prompt(self, context: Dict = None) -> str:
+        """Build system prompt with user financial context."""
+        base_prompt = """Você é o assistente virtual do EconomizeIA. Seja DIRETO e SUCINTO.
+
+## REGRAS:
+- Respostas curtas (máx 3-4 frases)
+- Use números diretos: "5 boletos, R$ 1.200 pendente"
+- Alerte problemas: "⚠️ 2 vencidos: Energia R$ 150 (3 dias)"
+- NUNCA diga "acesse o dashboard" - dê a informação
+- Sem explicações longas, apenas fatos
+"""
+        
+        if context:
+            # Contexto otimizado - apenas dados essenciais
+            context_text = f"Boletos: {context.get('total_bills', 0)} | Pendentes: {context.get('pending_bills', 0)} (R$ {context.get('total_pending', 0):.2f}) | Vencidos: {context.get('overdue_bills', 0)} | Mês: R$ {context.get('monthly_income', 0):.2f} receitas, R$ {context.get('monthly_expenses', 0):.2f} despesas, Saldo: R$ {context.get('monthly_balance', 0):.2f}"
+            
+            # Apenas alertas críticos
+            if context.get('overdue_bills', 0) > 0:
+                overdue = context.get('overdue_details', [])[:3]
+                overdue_strs = []
+                for b in overdue:
+                    issuer = b.get('issuer', '?')
+                    amount = b.get('amount', 0)
+                    overdue_strs.append(f'{issuer} R${amount:.2f}')
+                context_text += f" | ⚠️ Vencidos: {', '.join(overdue_strs)}"
+            
+            # Próximos 3 apenas
+            if context.get('next_bills'):
+                next_bills = context.get('next_bills', [])[:3]
+                next_strs = []
+                for b in next_bills:
+                    issuer = b.get('issuer', '?')
+                    amount = b.get('amount', 0)
+                    days = b.get('days_until', 0)
+                    next_strs.append(f'{issuer} R${amount:.2f} ({days}d)')
+                context_text += f" | Próximos: {', '.join(next_strs)}"
+            
+            return base_prompt + "\n\nDados: " + context_text
+        
+        return base_prompt
+    
+    def _build_user_prompt(self, message: str, conversation_history: List[Dict] = None) -> str:
+        """Build user prompt with message and optional history."""
+        prompt = f"Usuário: {message}\n\nAssistente:"
+        return prompt
+    
+    async def extract_expense_from_message(self, message: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract expense information from a natural language message using Gemini.
+        Returns structured data if an expense creation command is detected, None otherwise.
+        """
+        system_prompt = """Você é um extrator especializado em informações de despesas a partir de mensagens em português brasileiro.
+
+## SUA TAREFA:
+Analise a mensagem do usuário e determine se ele quer criar uma despesa/boleto.
+Se SIM, extraia os campos e retorne JSON válido.
+Se NÃO, retorne {"action": "chat"}.
+
+## FORMATO DE RESPOSTA (APENAS JSON):
+
+Se for comando de criação:
+{
+  "action": "create_expense",
+  "issuer": "string or null",
+  "amount": decimal or null,
+  "due_date": "YYYY-MM-DD or null",
+  "category": "alimentacao|moradia|servicos|transporte|saude|investimentos|outras or null",
+  "is_installment": false,
+  "installment_total": null,
+  "installment_current": null
+}
+
+Se NÃO for comando:
+{
+  "action": "chat"
+}
+
+## REGRAS:
+- Valores: "R$ 150,50" → 150.50
+- Datas: "15/12/2024" → "2024-12-15", "amanhã" → calcular data
+- Categorias: mapear palavras-chave para categorias
+- Responder APENAS JSON, sem texto adicional
+"""
+        
+        try:
+            response = self.model.generate_content(
+                f"{system_prompt}\n\nMensagem do usuário: {message}\n\nJSON:"
+            )
+            
+            # Extrair JSON da resposta
+            response_text = response.text.strip()
+            
+            # Tentar extrair JSON se houver markdown
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            # Parse JSON
+            try:
+                extracted_data = json.loads(response_text)
+                return extracted_data
+            except json.JSONDecodeError:
+                logger.error(f"Gemini retornou JSON inválido: {response_text}")
+                return {"action": "chat"}
+                
+        except Exception as e:
+            logger.error(f"Erro ao extrair despesa com Gemini: {e}", exc_info=True)
+            return {"action": "chat"}
+
+
+# Instância global do serviço
+gemini_service: Optional[GeminiService] = None
+
+def get_gemini_service() -> Optional[GeminiService]:
+    """Get or create Gemini service instance."""
+    global gemini_service
+    if not GEMINI_AVAILABLE:
+        return None
+    
+    if settings.USE_GEMINI and settings.GEMINI_API_KEY:
+        if gemini_service is None:
+            try:
+                gemini_service = GeminiService()
+            except Exception as e:
+                logger.error(f"Erro ao inicializar Gemini: {e}")
+                return None
+        return gemini_service
+    return None
+
