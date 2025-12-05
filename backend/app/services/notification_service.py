@@ -23,19 +23,68 @@ class NotificationService:
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
         self.smtp_from = settings.SMTP_FROM
+        
+        # Resend API (prioridade sobre SMTP)
+        self.resend_api_key = settings.RESEND_API_KEY
+        self.resend_from = settings.RESEND_FROM or "onboarding@resend.dev"
     
     async def send_email(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
-        """Send email notification."""
+        """Send email notification. Uses Resend API if configured, otherwise falls back to SMTP."""
+        
+        # Prioridade 1: Resend API (mais confiável)
+        if self.resend_api_key:
+            return await self._send_via_resend(to, subject, body, html_body)
+        
+        # Prioridade 2: SMTP tradicional
         if not self.smtp_host:
-            logger.warning(f"❌ SMTP not configured (SMTP_HOST={self.smtp_host}), skipping email to {to}")
+            logger.warning(f"❌ Email not configured (nem Resend nem SMTP), skipping email to {to}")
             return False
         
         if not self.smtp_user or not self.smtp_password:
             logger.warning(f"❌ SMTP credentials not configured (USER={bool(self.smtp_user)}, PASSWORD={'*' if self.smtp_password else 'NOT SET'}), skipping email to {to}")
             return False
         
+        return await self._send_via_smtp(to, subject, body, html_body)
+    
+    async def _send_via_resend(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
+        """Send email via Resend API."""
         try:
-            logger.info(f"Preparing email to {to} via {self.smtp_host}:{self.smtp_port}")
+            import resend
+            
+            resend.api_key = self.resend_api_key
+            
+            logger.info(f"📧 Sending email via Resend API to {to}")
+            
+            params = {
+                "from": self.resend_from,
+                "to": to,
+                "subject": subject,
+                "text": body,
+            }
+            
+            if html_body:
+                params["html"] = html_body
+            
+            response = resend.Emails.send(params)
+            
+            if response and hasattr(response, 'id'):
+                logger.info(f"✅ Email sent successfully via Resend to {to} (ID: {response.id})")
+                return True
+            else:
+                logger.error(f"❌ Resend API returned unexpected response: {response}")
+                return False
+                
+        except ImportError:
+            logger.error("❌ Resend library not installed. Install with: pip install resend")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error sending email via Resend to {to}: {e}", exc_info=True)
+            return False
+    
+    async def _send_via_smtp(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
+        """Send email via SMTP."""
+        try:
+            logger.info(f"📧 Preparing email to {to} via SMTP {self.smtp_host}:{self.smtp_port}")
             
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
@@ -57,7 +106,7 @@ class NotificationService:
                 logger.info(f"Sending message to {to}...")
                 server.send_message(msg)
             
-            logger.info(f"✅ Email sent successfully to {to}")
+            logger.info(f"✅ Email sent successfully via SMTP to {to}")
             return True
             
         except smtplib.SMTPAuthenticationError as e:
@@ -71,6 +120,14 @@ class NotificationService:
             return False
         except smtplib.SMTPException as e:
             logger.error(f"❌ SMTP Error sending email to {to}: {e}")
+            return False
+        except OSError as e:
+            # Erros de rede (conexão recusada, network unreachable, etc.)
+            error_msg = str(e)
+            if "Network is unreachable" in error_msg or "Connection refused" in error_msg:
+                logger.error(f"❌ SMTP Network Error: Não foi possível conectar ao servidor SMTP ({self.smtp_host}:{self.smtp_port}). Verifique se o servidor está acessível e se as portas não estão bloqueadas.")
+            else:
+                logger.error(f"❌ SMTP Network Error: {e}")
             return False
         except Exception as e:
             logger.error(f"❌ Unexpected error sending email to {to}: {e}", exc_info=True)
@@ -355,7 +412,7 @@ Este é um email automático, por favor não responda.
                 return False
             
             # Use FRONTEND_URL from settings, fallback to Vercel URL if not set
-            frontend_url = settings.FRONTEND_URL or 'https://economizeia.vercel.app'
+            frontend_url = (settings.FRONTEND_URL or 'https://economizeia.vercel.app').rstrip('/')
             verification_link = f"{frontend_url}/verify-email?token={verification_token}"
             logger.info(f"Verification link generated for {user.email}: {verification_link[:100]}...")
             
@@ -498,7 +555,7 @@ Equipe EconomizeIA
     async def send_email_already_registered(self, user: User, db: Session, resend_verification: bool = False) -> bool:
         """Send email when user tries to register with an email that already exists."""
         try:
-            frontend_url = settings.FRONTEND_URL or 'https://economizeia.vercel.app'
+            frontend_url = (settings.FRONTEND_URL or 'https://economizeia.vercel.app').rstrip('/')
             login_link = f"{frontend_url}/login"
             verification_link = None
             

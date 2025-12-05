@@ -69,16 +69,20 @@ async def register(
     # Check if user exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
-        # Send informative email to user explaining the situation
+        # Send informative email to user explaining the situation (não falha se email falhar)
         try:
             if not existing_user.email_verified:
                 # If email not verified, offer to resend verification
-                await notification_service.send_email_already_registered(existing_user, db, resend_verification=True)
+                email_sent = await notification_service.send_email_already_registered(existing_user, db, resend_verification=True)
+                if not email_sent:
+                    logger.warning(f"⚠️ Email informativo não foi enviado para {user_data.email} - verifique configuração SMTP")
             else:
                 # If email verified, just inform and offer login
-                await notification_service.send_email_already_registered(existing_user, db, resend_verification=False)
+                email_sent = await notification_service.send_email_already_registered(existing_user, db, resend_verification=False)
+                if not email_sent:
+                    logger.warning(f"⚠️ Email informativo não foi enviado para {user_data.email} - verifique configuração SMTP")
         except Exception as e:
-            logger.warning(f"Failed to send 'email already registered' notification to {user_data.email}: {e}")
+            logger.warning(f"⚠️ Erro ao tentar enviar email informativo para {user_data.email}: {e}")
             # Continue anyway - don't fail the request if email fails
         
         raise HTTPException(
@@ -117,11 +121,13 @@ async def register(
         request=request
     )
     
-    # Send verification email
+    # Send verification email (não falha o registro se email falhar)
     try:
-        await notification_service.send_verification_email(user, verification_token)
+        email_sent = await notification_service.send_verification_email(user, verification_token)
+        if not email_sent:
+            logger.warning(f"⚠️ Email de verificação não foi enviado para {user.email} - verifique configuração SMTP")
     except Exception as e:
-        logger.warning(f"Failed to send verification email to {user.email}: {e}")
+        logger.warning(f"⚠️ Erro ao tentar enviar email de verificação para {user.email}: {e}")
         # Don't fail registration if email fails
     
     return {

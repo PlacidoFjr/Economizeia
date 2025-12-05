@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@economizeia.com"
     
+    # Resend API (alternativa mais confiável que SMTP)
+    RESEND_API_KEY: str = ""  # Se configurado, usa Resend API ao invés de SMTP
+    RESEND_FROM: str = "onboarding@resend.dev"  # Email de envio do Resend
+    
     # SMS (Twilio)
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
@@ -162,6 +166,7 @@ logger.info("=" * 50)
 logger.info("Configurações carregadas:")
 logger.info(f"  DATABASE_URL: {'✅ Configurado' if settings.DATABASE_URL and 'localhost' not in settings.DATABASE_URL else '⚠️ Usando padrão local'}")
 logger.info(f"  REDIS_URL: {'✅ Configurado' if settings.REDIS_URL and 'localhost' not in settings.REDIS_URL else '⚠️ Usando padrão local'}")
+logger.info(f"  RESEND_API_KEY: {'✅ Configurado' if settings.RESEND_API_KEY else '❌ Não configurado (usando SMTP se disponível)'}")
 logger.info(f"  SMTP_HOST: {'✅ Configurado' if settings.SMTP_HOST else '❌ Não configurado'}")
 logger.info(f"  GEMINI_API_KEY: {'✅ Configurado' if settings.GEMINI_API_KEY else '❌ Não configurado'}")
 logger.info(f"  CORS_ORIGINS: {settings.CORS_ORIGINS[:100] if len(settings.CORS_ORIGINS) > 100 else settings.CORS_ORIGINS}")
