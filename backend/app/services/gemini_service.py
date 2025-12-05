@@ -271,7 +271,7 @@ Se não houver, usar "description": null
 
 Sempre retornar JSON puro, sem markdown, sem texto extra, sem comentários:
 
-**Quando for comando de criação:**
+**Quando for comando de criação COMPLETO (tem valor e categoria/emissor):**
 {
   "action": "create_expense" ou "create_income",
   "amount": 150.50,
@@ -281,7 +281,24 @@ Sempre retornar JSON puro, sem markdown, sem texto extra, sem comentários:
   "description": "texto ou null",
   "is_installment": false,
   "installment_total": null,
-  "installment_current": null
+  "installment_current": null,
+  "needs_info": false,
+  "missing_info": null
+}
+
+**Quando for comando de criação mas FALTAR informação importante (valor OK mas sem categoria/emissor):**
+{
+  "action": "ask_for_info",
+  "amount": 300.00,
+  "issuer": null,
+  "due_date": null,
+  "category": null,
+  "description": null,
+  "is_installment": false,
+  "installment_total": null,
+  "installment_current": null,
+  "needs_info": true,
+  "missing_info": "category" ou "issuer" ou "category_and_issuer"
 }
 
 **Quando não for comando:**
@@ -297,6 +314,21 @@ Sempre retornar JSON puro, sem markdown, sem texto extra, sem comentários:
 4. Ser rigoroso na conversão de valores e datas
 5. Nunca inferir categoria errada
 6. Sempre evitar ambiguidade
+
+## DETECÇÃO DE INFORMAÇÕES FALTANTES:
+
+**Quando detectar intenção de criação mas faltar informação importante:**
+
+- Se tiver VALOR mas NÃO tiver CATEGORIA nem EMISSOR: retornar "action": "ask_for_info", "missing_info": "category_and_issuer"
+- Se tiver VALOR e CATEGORIA mas NÃO tiver EMISSOR: retornar "action": "ask_for_info", "missing_info": "issuer"
+- Se tiver VALOR e EMISSOR mas NÃO tiver CATEGORIA: retornar "action": "ask_for_info", "missing_info": "category"
+- Se tiver VALOR, CATEGORIA e EMISSOR: retornar "action": "create_expense" ou "create_income"
+
+**Exemplos de quando perguntar:**
+
+- "Gastei 300 reais" → falta categoria e emissor → "ask_for_info"
+- "Paguei 150 reais" → falta categoria e emissor → "ask_for_info"
+- "Recebi 500 reais" → falta emissor (receitas não precisam de categoria) → pode criar direto ou perguntar emissor
 
 ## EXEMPLOS APRIMORADOS:
 

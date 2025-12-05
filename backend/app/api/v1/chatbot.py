@@ -108,8 +108,9 @@ async def chat_with_assistant(
         # Se detectar confirmação simples ("sim", "pode", "confirma") e houver transação pendente
         is_confirmation = any(word in message_lower for word in ['sim', 'pode', 'confirma', 'ok', 'tudo bem', 'pode adicionar', 'adiciona', 'coloca', 'põe'])
         
-        # Verificar se é comando de criação (despesa ou receita)
+        # Verificar se é comando de criação (despesa ou receita) ou se precisa perguntar mais informações
         is_create_command = expense_data and expense_data.get("action") in ["create_expense", "create_income"]
+        needs_info = expense_data and expense_data.get("action") == "ask_for_info"
         
         # PRIORIDADE 1: Se o prompt retornou uma ação, usar ela (prompt tem prioridade sobre detecção local)
         if expense_data and expense_data.get("action") == "create_income":
@@ -122,6 +123,52 @@ async def chat_with_assistant(
             is_income = False
             is_expense = True
             logger.info("✅ Prompt retornou create_expense - forçando tipo como EXPENSE")
+        elif needs_info:
+            # Determinar tipo baseado na mensagem quando precisa perguntar
+            if is_income and not is_expense:
+                transaction_type = BillType.INCOME
+            elif is_expense and not is_income:
+                transaction_type = BillType.EXPENSE
+            else:
+                # Se não conseguir determinar, assumir despesa (comportamento padrão)
+                transaction_type = BillType.EXPENSE
+            logger.info(f"❓ Prompt retornou ask_for_info - tipo: {transaction_type.value}, missing: {expense_data.get('missing_info')}")
+        
+        # Se precisa perguntar mais informações, fazer pergunta contextual
+        if needs_info:
+            amount = expense_data.get("amount") if expense_data else None
+            missing_info = expense_data.get("missing_info") if expense_data else None
+            transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
+            
+            if not amount or amount <= 0:
+                return ChatResponse(
+                    response=f"Não consegui identificar o valor da {transaction_label}. Por favor, informe o valor. Exemplo: 'Adicionar {transaction_label} de R$ 150,50'",
+                    action="ask_for_info"
+                )
+            
+            # Perguntas contextuais baseadas no que falta
+            if missing_info == "category_and_issuer":
+                return ChatResponse(
+                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f}. Para organizar melhor, me diga:\n\n• Com o que foi esse gasto? (ex: compras, roupas, energia, alimentação)\n• Onde foi? (ex: Supermercado X, Loja Y, Energia Elétrica)",
+                    action="ask_for_info"
+                )
+            elif missing_info == "category":
+                issuer_text = expense_data.get("issuer", "esse gasto")
+                return ChatResponse(
+                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f} em {issuer_text}. Em qual categoria devo classificar? (ex: compras, roupas, energia, alimentação, transporte, saúde, lazer, educação, outras)",
+                    action="ask_for_info"
+                )
+            elif missing_info == "issuer":
+                category_text = expense_data.get("category", "essa categoria")
+                return ChatResponse(
+                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f} na categoria {category_text}. Onde foi esse gasto? (ex: Supermercado X, Loja Y, Energia Elétrica, Uber)",
+                    action="ask_for_info"
+                )
+            else:
+                return ChatResponse(
+                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f}. Pode me dar mais detalhes sobre esse gasto? (categoria, onde foi, etc.)",
+                    action="ask_for_info"
+                )
         
         if is_create_command or (is_confirmation and has_pending_transaction and pending_amount):
             # Criar transação (despesa ou receita)
