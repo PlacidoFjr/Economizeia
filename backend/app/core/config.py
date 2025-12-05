@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings  # type: ignore
 from typing import List
 import os
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 # No Railway, as variáveis vêm das Environment Variables configuradas na plataforma
 if os.getenv("ENVIRONMENT", "development") == "development" or not os.getenv("RAILWAY_ENVIRONMENT"):
     try:
-        from dotenv import load_dotenv
+        from dotenv import load_dotenv  # type: ignore
         
         # Tenta carregar de diferentes locais
         env_paths = [
