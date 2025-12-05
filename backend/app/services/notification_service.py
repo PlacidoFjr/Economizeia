@@ -57,6 +57,8 @@ class NotificationService:
             logger.info(f"Connecting to SMTP server {self.smtp_host}:{self.smtp_port} (timeout=60s)")
             # Aumentar timeout para 60s para dar mais tempo em conexões lentas
             with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=60) as server:
+                logger.info("✅ SMTP connection established successfully")
+                
                 # Habilitar debug se necessário (comentar em produção se muito verboso)
                 # server.set_debuglevel(1)
                 
