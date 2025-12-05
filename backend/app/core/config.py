@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     def get_cors_origins(self) -> List[str]:
         """Parse CORS_ORIGINS from JSON string or comma-separated string."""
         import logging
+        import re
         logger = logging.getLogger(__name__)
         
         if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == "":
@@ -77,8 +78,21 @@ class Settings(BaseSettings):
             # Tentar fazer parse do JSON
             parsed = json.loads(self.CORS_ORIGINS)
             if isinstance(parsed, list):
-                logger.info(f"CORS origins (JSON list): {parsed}")
-                return parsed
+                # Expandir wildcards do Vercel
+                expanded = []
+                for origin in parsed:
+                    if isinstance(origin, str) and "*" in origin:
+                        # Se contém wildcard, adicionar padrões comuns do Vercel
+                        if "vercel.app" in origin:
+                            expanded.append(origin.replace("*", "economizeia"))
+                            # Adicionar padrão para previews do Vercel
+                            expanded.append("https://economizeia-*.vercel.app")
+                        else:
+                            expanded.append(origin)
+                    else:
+                        expanded.append(origin)
+                logger.info(f"CORS origins (JSON list): {expanded}")
+                return expanded
             elif isinstance(parsed, str):
                 # Se for string única, retornar como lista
                 logger.info(f"CORS origins (JSON string): [{parsed}]")

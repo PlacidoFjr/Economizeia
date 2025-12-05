@@ -27,30 +27,53 @@ class NotificationService:
     async def send_email(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
         """Send email notification."""
         if not self.smtp_host:
-            logger.warning("SMTP not configured, skipping email")
+            logger.warning(f"❌ SMTP not configured (SMTP_HOST={self.smtp_host}), skipping email to {to}")
+            return False
+        
+        if not self.smtp_user or not self.smtp_password:
+            logger.warning(f"❌ SMTP credentials not configured (USER={bool(self.smtp_user)}, PASSWORD={'*' if self.smtp_password else 'NOT SET'}), skipping email to {to}")
             return False
         
         try:
+            logger.info(f"Preparing email to {to} via {self.smtp_host}:{self.smtp_port}")
+            
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
             msg['From'] = self.smtp_from
             msg['To'] = to
             
-            msg.attach(MIMEText(body, 'plain'))
+            msg.attach(MIMEText(body, 'plain', 'utf-8'))
             if html_body:
-                msg.attach(MIMEText(html_body, 'html'))
+                msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+            logger.info(f"Connecting to SMTP server {self.smtp_host}:{self.smtp_port}")
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
+                logger.info("Starting TLS...")
                 server.starttls()
-                if self.smtp_user and self.smtp_password:
-                    server.login(self.smtp_user, self.smtp_password)
+                
+                logger.info(f"Logging in as {self.smtp_user}")
+                server.login(self.smtp_user, self.smtp_password)
+                
+                logger.info(f"Sending message to {to}...")
                 server.send_message(msg)
             
-            logger.info(f"Email sent to {to}")
+            logger.info(f"✅ Email sent successfully to {to}")
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"❌ SMTP Authentication failed for {to}: {e}")
+            return False
+        except smtplib.SMTPRecipientsRefused as e:
+            logger.error(f"❌ SMTP Recipient refused for {to}: {e}")
+            return False
+        except smtplib.SMTPServerDisconnected as e:
+            logger.error(f"❌ SMTP Server disconnected for {to}: {e}")
+            return False
+        except smtplib.SMTPException as e:
+            logger.error(f"❌ SMTP Error sending email to {to}: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Error sending email: {e}")
+            logger.error(f"❌ Unexpected error sending email to {to}: {e}", exc_info=True)
             return False
     
     async def send_sms(self, to: str, message: str) -> bool:
@@ -324,18 +347,36 @@ Este é um email automático, por favor não responda.
     async def send_verification_email(self, user: User, verification_token: str) -> bool:
         """Send email verification email to user."""
         try:
-            verification_link = f"{settings.FRONTEND_URL or 'http://localhost:3000'}/verify-email?token={verification_token}"
+            logger.info(f"Preparing verification email for {user.email}")
+            
+            # Validate token
+            if not verification_token or len(verification_token) == 0:
+                logger.error(f"Invalid verification token for {user.email}")
+                return False
+            
+            # Use FRONTEND_URL from settings, fallback to Vercel URL if not set
+            frontend_url = settings.FRONTEND_URL or 'https://economizeia.vercel.app'
+            verification_link = f"{frontend_url}/verify-email?token={verification_token}"
+            logger.info(f"Verification link generated for {user.email}: {verification_link[:100]}...")
+            
+            # Validate link length (some email clients have limits)
+            if len(verification_link) > 2000:
+                logger.warning(f"Verification link is very long ({len(verification_link)} chars), may cause issues")
             
             # Load HTML template
             template_path = Path(__file__).parent.parent / "templates" / "email_verification.html"
             
             if template_path.exists():
+                logger.info(f"Loading email template from {template_path}")
                 with open(template_path, 'r', encoding='utf-8') as f:
                     html_template = f.read()
                 
-                # Replace variables
-                html_body = html_template.replace('{{name}}', user.name)
+                # Replace variables - escape HTML special characters in name
+                from html import escape
+                safe_name = escape(user.name) if user.name else "Usuário"
+                html_body = html_template.replace('{{name}}', safe_name)
                 html_body = html_body.replace('{{verification_link}}', verification_link)
+                logger.info(f"Email template processed for {user.email}")
             else:
                 # Fallback HTML
                 html_body = f"""
@@ -415,8 +456,9 @@ Este é um email automático, por favor não responda.
                 """
             
             # Plain text version
+            user_name = user.name if user.name else "Usuário"
             text_body = f"""
-Olá {user.name},
+Olá {user_name},
 
 Obrigado por se cadastrar no EconomizeIA!
 
@@ -432,18 +474,160 @@ Atenciosamente,
 Equipe EconomizeIA
 """
             
+            logger.info(f"Attempting to send verification email to {user.email}")
+            
             # Send email
-            return await self.send_email(
+            result = await self.send_email(
                 to=user.email,
                 subject="Confirme seu email - EconomizeIA",
                 body=text_body,
                 html_body=html_body
             )
             
+            if result:
+                logger.info(f"✅ Verification email sent successfully to {user.email}")
+            else:
+                logger.error(f"❌ Failed to send verification email to {user.email} - check SMTP configuration")
+            
+            return result
+            
         except Exception as e:
-            logger.error(f"Error sending verification email to {user.email}: {e}")
+            logger.error(f"❌ Exception sending verification email to {user.email}: {e}", exc_info=True)
             return False
 
+    async def send_email_already_registered(self, user: User, db: Session, resend_verification: bool = False) -> bool:
+        """Send email when user tries to register with an email that already exists."""
+        try:
+            frontend_url = settings.FRONTEND_URL or 'https://economizeia.vercel.app'
+            login_link = f"{frontend_url}/login"
+            verification_link = None
+            
+            if resend_verification and not user.email_verified:
+                # Generate new verification token
+                from app.core.security import create_verification_token
+                from datetime import timedelta, datetime, timezone
+                verification_token = create_verification_token(data={"sub": str(user.id), "email": user.email})
+                verification_link = f"{frontend_url}/verify-email?token={verification_token}"
+                
+                # Update user's verification token
+                user.verification_token = verification_token
+                user.verification_token_expires = datetime.now(timezone.utc) + timedelta(hours=24)
+                db.commit()
+                db.refresh(user)
+            
+            user_name = user.name if user.name else "Usuário"
+            
+            html_body = f"""
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+                <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
+                    <tr>
+                        <td align="center" style="padding: 40px 20px;">
+                            <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                                
+                                <!-- Header -->
+                                <tr>
+                                    <td style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 40px 40px; text-align: center;">
+                                        <h1 style="margin: 0 0 8px 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2;">
+                                            EconomizeIA
+                                        </h1>
+                                        <p style="margin: 0; color: #e5e7eb; font-size: 16px; font-weight: 400; line-height: 1.5;">
+                                            Bem-vindo de volta!
+                                        </p>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Content -->
+                                <tr>
+                                    <td style="padding: 50px 40px;">
+                                        <h2 style="margin: 0 0 20px 0; color: #111827; font-size: 24px; font-weight: 600; line-height: 1.3;">
+                                            Olá, {user_name}! 👋
+                                        </h2>
+                                        <p style="margin: 0 0 20px 0; color: #374151; font-size: 17px; line-height: 1.7;">
+                                            Notamos que você tentou criar uma nova conta, mas este email <strong style="color: #1f2937;">já está cadastrado</strong> no EconomizeIA!
+                                        </p>
+                                        {f'<p style="margin: 0 0 20px 0; color: #374151; font-size: 17px; line-height: 1.7;">Seu email ainda não foi verificado. Para acessar sua conta, você precisa confirmar seu email primeiro.</p>' if resend_verification and not user.email_verified else ''}
+                                        <p style="margin: 0 0 32px 0; color: #4b5563; font-size: 16px; line-height: 1.7;">
+                                            {'Para verificar seu email e começar a usar o sistema, clique no botão abaixo:' if resend_verification and not user.email_verified else 'Para acessar sua conta, clique no botão abaixo e faça login:'}
+                                        </p>
+                                        
+                                        <!-- CTA Button -->
+                                        <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
+                                            <tr>
+                                                <td align="center">
+                                                    {f'<a href="{verification_link}" style="display: inline-block; padding: 16px 40px; background-color: #1f2937; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 17px; line-height: 1.5; margin-bottom: 16px;">Confirmar Email →</a>' if resend_verification and not user.email_verified and verification_link else ''}
+                                                    <a href="{login_link}" style="display: inline-block; padding: 16px 40px; background-color: #1f2937; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 17px; line-height: 1.5;">
+                                                        {'Fazer Login' if user.email_verified else 'Fazer Login (após verificar)'}
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        
+                                        {f'<div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin-bottom: 24px; border-left: 4px solid #3b82f6;"><p style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600; line-height: 1.6;">Não consegue clicar no botão de verificação?</p><p style="margin: 0; color: #6b7280; font-size: 13px; line-height: 1.6; word-break: break-all;">Copie e cole este link no seu navegador:<br><span style="color: #3b82f6;">{verification_link}</span></p></div>' if resend_verification and not user.email_verified and verification_link else ''}
+                                        
+                                        <div style="background-color: #fef3c7; border-radius: 8px; padding: 16px; border-left: 4px solid #f59e0b;">
+                                            <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
+                                                <strong>💡 Dica:</strong> {'Após verificar seu email, você poderá fazer login normalmente.' if resend_verification and not user.email_verified else 'Se você esqueceu sua senha, use a opção \'Esqueci minha senha\' na página de login.'}
+                                            </p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Footer -->
+                                <tr>
+                                    <td style="padding: 40px; text-align: center; background-color: #f9fafb; border-top: 2px solid #e5e7eb;">
+                                        <p style="margin: 0 0 12px 0; color: #374151; font-size: 15px; line-height: 1.6;">
+                                            <strong style="color: #111827;">Não tentou criar uma conta?</strong>
+                                        </p>
+                                        <p style="margin: 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+                                            Se você não tentou criar uma conta, pode ignorar este email com segurança.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+            """
+            
+            text_body = f"""
+Olá {user_name},
+
+Notamos que você tentou criar uma nova conta, mas este email já está cadastrado no EconomizeIA!
+
+{"Seu email ainda não foi verificado. Para acessar sua conta, você precisa confirmar seu email primeiro." if resend_verification and not user.email_verified else ""}
+
+{"Link de verificação: " + verification_link if resend_verification and not user.email_verified and verification_link else ""}
+
+Para acessar sua conta, faça login em: {login_link}
+
+{"Se você esqueceu sua senha, use a opção 'Esqueci minha senha' na página de login." if user.email_verified else ""}
+
+Se você não tentou criar uma conta, pode ignorar este email com segurança.
+
+Atenciosamente,
+Equipe EconomizeIA
+"""
+            
+            logger.info(f"Sending 'email already registered' notification to {user.email}")
+            
+            return await self.send_email(
+                to=user.email,
+                subject="Bem-vindo de volta ao EconomizeIA! 🎉",
+                body=text_body,
+                html_body=html_body
+            )
+            
+        except Exception as e:
+            logger.error(f"Error sending 'email already registered' notification to {user.email}: {e}", exc_info=True)
+            return False
 
     async def send_budget_exceeded_alert(
         self,

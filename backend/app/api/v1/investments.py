@@ -303,3 +303,4 @@ async def delete_investment(
     db.delete(investment)
     db.commit()
 
+

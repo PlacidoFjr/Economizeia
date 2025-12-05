@@ -69,6 +69,18 @@ async def register(
     # Check if user exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
+        # Send informative email to user explaining the situation
+        try:
+            if not existing_user.email_verified:
+                # If email not verified, offer to resend verification
+                await notification_service.send_email_already_registered(existing_user, db, resend_verification=True)
+            else:
+                # If email verified, just inform and offer login
+                await notification_service.send_email_already_registered(existing_user, db, resend_verification=False)
+        except Exception as e:
+            logger.warning(f"Failed to send 'email already registered' notification to {user_data.email}: {e}")
+            # Continue anyway - don't fail the request if email fails
+        
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email já cadastrado"

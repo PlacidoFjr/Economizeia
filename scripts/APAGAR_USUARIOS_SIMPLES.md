@@ -61,3 +61,4 @@ python scripts/reset_users_railway.py
 3. Cole a `DATABASE_URL` quando pedir
 4. Digite "SIM" para confirmar
 
+
