@@ -112,7 +112,11 @@ async def chat_with_assistant(
             # Criar transação (despesa ou receita)
             try:
                 # Usar valor do expense_data ou do histórico
-                amount = expense_data.get("amount") if expense_data and expense_data.get("amount") else pending_amount
+                amount = None
+                if expense_data and expense_data.get("amount"):
+                    amount = expense_data.get("amount")
+                elif pending_amount:
+                    amount = pending_amount
                 
                 # Validar dados mínimos
                 if not amount or amount <= 0:
@@ -121,19 +125,10 @@ async def chat_with_assistant(
                         response=f"Não consegui identificar o valor da {transaction_label}. Por favor, informe o valor. Exemplo: 'Adicionar {transaction_label} de R$ 150,50'",
                         action="error"
                     )
-            # Criar transação (despesa ou receita)
-            try:
-                # Validar dados mínimos
-                if not expense_data.get("amount") or expense_data.get("amount") <= 0:
-                    transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
-                    return ChatResponse(
-                        response=f"Não consegui identificar o valor da {transaction_label}. Por favor, informe o valor. Exemplo: 'Adicionar {transaction_label} de R$ 150,50'",
-                        action="error"
-                    )
                 
                 # Processar data de vencimento
                 due_date = date.today()
-                if expense_data.get("due_date"):
+                if expense_data and expense_data.get("due_date"):
                     try:
                         # Tentar parsear a data
                         if isinstance(expense_data["due_date"], str):
