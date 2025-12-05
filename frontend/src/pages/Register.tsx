@@ -58,28 +58,37 @@ export default function Register() {
       }
     } catch (err: any) {
       console.error('❌ Erro no registro:', err)
-      let errorMsg = 'Erro ao registrar'
       
-      if (err.message) {
-        // Erro de conexão/timeout
-        errorMsg = err.message
-        console.error('❌ Mensagem de erro:', err.message)
-      } else if (err.response?.data?.detail) {
-        // Erro do backend
-        errorMsg = err.response.data.detail
-        console.error('❌ Erro do backend:', err.response.data)
-      } else if (err.response) {
-        errorMsg = `Erro ${err.response.status}: ${err.response.statusText}`
-        console.error('❌ Erro HTTP:', err.response.status, err.response.statusText)
+      // Extrair mensagem de erro do backend
+      let errorMessage = 'Erro ao criar conta. Tente novamente.'
+      const backendMessage = err.response?.data?.detail || err.message || ''
+      const statusCode = err.response?.status
+      
+      // Traduzir mensagens do backend para português amigável
+      if (backendMessage.includes('já cadastrado') || backendMessage.includes('já existe') || backendMessage.includes('Email já')) {
+        errorMessage = 'Este email já está cadastrado. Tente fazer login ou use outro email.'
+      } else if (backendMessage.includes('inválido') || backendMessage.includes('invalid')) {
+        errorMessage = 'Email inválido. Verifique se o email está correto.'
+      } else if (backendMessage.includes('senha') && backendMessage.includes('curta') || backendMessage.includes('password') && backendMessage.includes('short')) {
+        errorMessage = 'A senha deve ter pelo menos 8 caracteres.'
+      } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada')) {
+        errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.'
+      } else if (statusCode === 400) {
+        if (backendMessage) {
+          errorMessage = backendMessage
+        } else {
+          errorMessage = 'Dados inválidos. Verifique se todos os campos estão preenchidos corretamente.'
+        }
+      } else if (statusCode === 409) {
+        errorMessage = 'Este email já está cadastrado. Tente fazer login.'
+      } else if (statusCode === 500) {
+        errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.'
+      } else if (backendMessage && !backendMessage.includes('Erro') && !backendMessage.includes('Error')) {
+        // Se o backend retornou uma mensagem amigável, usar ela
+        errorMessage = backendMessage
       }
       
-      if (errorMsg.includes('já cadastrado') || errorMsg.includes('já existe')) {
-        showToast('Este email já está cadastrado. Tente fazer login.', 'error', 6000)
-      } else if (errorMsg.includes('conectar') || errorMsg.includes('timeout') || errorMsg.includes('API não configurada') || errorMsg.includes('Network Error')) {
-        showToast(`Erro de conexão: ${errorMsg}`, 'error', 10000)
-      } else {
-        showToast(errorMsg, 'error', 8000)
-      }
+      showToast(errorMessage, 'error', 8000)
     } finally {
       setLoading(false)
     }

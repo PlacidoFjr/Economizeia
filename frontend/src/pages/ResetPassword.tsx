@@ -53,7 +53,29 @@ export default function ResetPassword() {
         navigate('/login')
       }, 3000)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Erro ao redefinir senha. O token pode estar expirado.')
+      const backendMessage = err.response?.data?.detail || err.message || ''
+      const statusCode = err.response?.status
+      
+      let errorMessage = 'Erro ao redefinir senha. Tente novamente.'
+      
+      // Traduzir mensagens para português amigável
+      if (backendMessage.includes('inválido') || backendMessage.includes('invalid') || backendMessage.includes('Token inválido')) {
+        errorMessage = 'Link de redefinição inválido. Solicite um novo link de redefinição de senha.'
+      } else if (backendMessage.includes('expirado') || backendMessage.includes('expired') || backendMessage.includes('Token expirado')) {
+        errorMessage = 'Este link de redefinição expirou. Solicite um novo link de redefinição de senha.'
+      } else if (backendMessage.includes('curta') || backendMessage.includes('short') || backendMessage.includes('senha') && backendMessage.includes('mínimo')) {
+        errorMessage = 'A senha deve ter pelo menos 8 caracteres.'
+      } else if (statusCode === 400) {
+        errorMessage = 'Dados inválidos. Verifique se a senha atende aos requisitos (mínimo 8 caracteres).'
+      } else if (statusCode === 404) {
+        errorMessage = 'Link de redefinição não encontrado. Solicite um novo link.'
+      } else if (statusCode === 500) {
+        errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.'
+      } else if (backendMessage && !backendMessage.includes('Erro') && !backendMessage.includes('Error')) {
+        errorMessage = backendMessage
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

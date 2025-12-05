@@ -46,29 +46,35 @@ export default function Login() {
       navigate('/app/dashboard')
     } catch (err: any) {
       console.error('❌ Erro no login:', err)
-      let errorDetail = 'Erro ao fazer login'
       
-      if (err.message) {
-        errorDetail = err.message
-        console.error('❌ Mensagem de erro:', err.message)
-      } else if (err.response?.data?.detail) {
-        errorDetail = err.response.data.detail
-        console.error('❌ Erro do backend:', err.response.data)
-      } else if (err.response) {
-        errorDetail = `Erro ${err.response.status}: ${err.response.statusText}`
-        console.error('❌ Erro HTTP:', err.response.status, err.response.statusText)
+      // Extrair mensagem de erro do backend
+      let errorMessage = 'Erro ao fazer login. Tente novamente.'
+      const backendMessage = err.response?.data?.detail || err.message || ''
+      const statusCode = err.response?.status
+      
+      // Traduzir mensagens do backend para português amigável
+      if (backendMessage.includes('não verificado') || backendMessage.includes('verificar') || backendMessage.includes('Email não verificado')) {
+        errorMessage = 'Seu email ainda não foi verificado. Verifique sua caixa de entrada e clique no link de confirmação que enviamos.'
+      } else if (backendMessage.includes('incorretos') || backendMessage.includes('senha') || backendMessage.includes('Email ou senha')) {
+        errorMessage = 'Email ou senha incorretos. Verifique suas credenciais e tente novamente.'
+      } else if (backendMessage.includes('inativa') || backendMessage.includes('inativo')) {
+        errorMessage = 'Sua conta está inativa. Entre em contato com o suporte para mais informações.'
+      } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada')) {
+        errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.'
+      } else if (statusCode === 401) {
+        errorMessage = 'Email ou senha incorretos. Verifique suas credenciais.'
+      } else if (statusCode === 403) {
+        errorMessage = 'Acesso negado. Verifique se seu email foi confirmado ou entre em contato com o suporte.'
+      } else if (statusCode === 404) {
+        errorMessage = 'Usuário não encontrado. Verifique se o email está correto.'
+      } else if (statusCode === 500) {
+        errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.'
+      } else if (backendMessage && !backendMessage.includes('Erro')) {
+        // Se o backend retornou uma mensagem amigável, usar ela
+        errorMessage = backendMessage
       }
       
-      // Se o erro for sobre email não verificado, mostrar mensagem mais clara
-      if (errorDetail.includes('não verificado') || errorDetail.includes('verificar')) {
-        showToast('Email não verificado. Verifique sua caixa de entrada e clique no link de confirmação.', 'warning', 8000)
-      } else if (errorDetail.includes('incorretos') || errorDetail.includes('senha')) {
-        showToast('Email ou senha incorretos. Verifique suas credenciais.', 'error', 5000)
-      } else if (errorDetail.includes('conectar') || errorDetail.includes('timeout') || errorDetail.includes('API não configurada') || errorDetail.includes('Network Error')) {
-        showToast(`Erro de conexão: ${errorDetail}`, 'error', 10000)
-      } else {
-        showToast(errorDetail, 'error', 8000)
-      }
+      showToast(errorMessage, 'error', 8000)
     } finally {
       setLoading(false)
     }

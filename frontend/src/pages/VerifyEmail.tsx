@@ -35,7 +35,27 @@ export default function VerifyEmail() {
         navigate('/login')
       }, 3000)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Erro ao verificar email. O token pode ser inválido ou expirado.')
+      const backendMessage = err.response?.data?.detail || err.message || ''
+      const statusCode = err.response?.status
+      
+      let errorMessage = 'Erro ao verificar email. Tente novamente.'
+      
+      // Traduzir mensagens para português amigável
+      if (backendMessage.includes('inválido') || backendMessage.includes('invalid') || backendMessage.includes('Token inválido')) {
+        errorMessage = 'Link de verificação inválido. Solicite um novo link de verificação.'
+      } else if (backendMessage.includes('expirado') || backendMessage.includes('expired') || backendMessage.includes('Token expirado')) {
+        errorMessage = 'Este link de verificação expirou. Solicite um novo link de verificação.'
+      } else if (backendMessage.includes('não encontrado') || backendMessage.includes('not found') || statusCode === 404) {
+        errorMessage = 'Usuário não encontrado. Verifique se o link está correto.'
+      } else if (statusCode === 400) {
+        errorMessage = 'Link de verificação inválido ou expirado. Solicite um novo link.'
+      } else if (statusCode === 500) {
+        errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.'
+      } else if (backendMessage && !backendMessage.includes('Erro') && !backendMessage.includes('Error')) {
+        errorMessage = backendMessage
+      }
+      
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
