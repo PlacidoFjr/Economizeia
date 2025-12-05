@@ -330,11 +330,17 @@ Sempre retornar JSON puro, sem markdown, sem texto extra, sem comentários:
 - Se tiver VALOR e EMISSOR mas NÃO tiver CATEGORIA: retornar "action": "ask_for_info", "missing_info": "category"
 - Se tiver VALOR, CATEGORIA e EMISSOR: retornar "action": "create_expense" ou "create_income"
 
+**REGRA CRÍTICA PARA RECEITAS:**
+- Receitas SEMPRE precisam de CATEGORIA
+- Se for RECEITA e não tiver CATEGORIA: SEMPRE retornar "action": "ask_for_info", "missing_info": "category"
+- NUNCA criar receita sem categoria
+
 **Exemplos de quando perguntar:**
 
 - "Gastei 300 reais" → falta categoria e emissor → "ask_for_info"
 - "Paguei 150 reais" → falta categoria e emissor → "ask_for_info"
-- "Recebi 500 reais" → falta emissor (receitas não precisam de categoria) → pode criar direto ou perguntar emissor
+- "Recebi 500 reais" → falta CATEGORIA (receitas SEMPRE precisam de categoria) → "ask_for_info" com "missing_info": "category"
+- "Recebi salário 500 reais" → tem categoria (salário → investimentos) → pode criar
 
 ## EXEMPLOS APRIMORADOS:
 

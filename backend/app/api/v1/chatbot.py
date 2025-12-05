@@ -219,28 +219,43 @@ async def chat_with_assistant(
                 )
             
             # Perguntas contextuais baseadas no que falta
-            if missing_info == "category_and_issuer":
-                return ChatResponse(
-                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f}. Para organizar melhor, me diga:\n\n• Com o que foi esse gasto? (ex: compras, roupas, energia, alimentação)\n• Onde foi? (ex: Supermercado X, Loja Y, Energia Elétrica)",
-                    action="ask_for_info"
-                )
-            elif missing_info == "category":
-                issuer_text = expense_data.get("issuer", "esse gasto")
-                return ChatResponse(
-                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f} em {issuer_text}. Em qual categoria devo classificar? (ex: compras, roupas, energia, alimentação, transporte, saúde, lazer, educação, outras)",
-                    action="ask_for_info"
-                )
-            elif missing_info == "issuer":
-                category_text = expense_data.get("category", "essa categoria")
-                return ChatResponse(
-                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f} na categoria {category_text}. Onde foi esse gasto? (ex: Supermercado X, Loja Y, Energia Elétrica, Uber)",
-                    action="ask_for_info"
-                )
+            if transaction_type == BillType.INCOME:
+                # Para receitas, sempre perguntar sobre a origem/fonte
+                if missing_info == "category" or missing_info == "category_and_issuer" or not missing_info:
+                    return ChatResponse(
+                        response=f"Entendi! Você recebeu R$ {amount:.2f}. De onde veio essa receita? (ex: salário, freelance, vendas, comissão, bônus, reembolso, aluguel recebido, investimentos, outras)",
+                        action="ask_for_info"
+                    )
+                elif missing_info == "issuer":
+                    category_text = expense_data.get("category", "essa receita")
+                    return ChatResponse(
+                        response=f"Entendi! Você recebeu R$ {amount:.2f} de {category_text}. Qual foi a fonte/origem dessa receita? (ex: Empresa X, Cliente Y, Banco Z)",
+                        action="ask_for_info"
+                    )
             else:
-                return ChatResponse(
-                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f}. Pode me dar mais detalhes sobre esse gasto? (categoria, onde foi, etc.)",
-                    action="ask_for_info"
-                )
+                # Para despesas
+                if missing_info == "category_and_issuer":
+                    return ChatResponse(
+                        response=f"Entendi! Você {transaction_label} R$ {amount:.2f}. Para organizar melhor, me diga:\n\n• Com o que foi esse gasto? (ex: compras, roupas, energia, alimentação)\n• Onde foi? (ex: Supermercado X, Loja Y, Energia Elétrica)",
+                        action="ask_for_info"
+                    )
+                elif missing_info == "category":
+                    issuer_text = expense_data.get("issuer", "esse gasto")
+                    return ChatResponse(
+                        response=f"Entendi! Você {transaction_label} R$ {amount:.2f} em {issuer_text}. Em qual categoria devo classificar? (ex: compras, roupas, energia, alimentação, transporte, saúde, lazer, educação, outras)",
+                        action="ask_for_info"
+                    )
+                elif missing_info == "issuer":
+                    category_text = expense_data.get("category", "essa categoria")
+                    return ChatResponse(
+                        response=f"Entendi! Você {transaction_label} R$ {amount:.2f} na categoria {category_text}. Onde foi esse gasto? (ex: Supermercado X, Loja Y, Energia Elétrica, Uber)",
+                        action="ask_for_info"
+                    )
+                else:
+                    return ChatResponse(
+                        response=f"Entendi! Você {transaction_label} R$ {amount:.2f}. Pode me dar mais detalhes sobre esse gasto? (categoria, onde foi, etc.)",
+                        action="ask_for_info"
+                    )
         
         # Verificar se é resposta a uma pergunta anterior (tem valor pendente e nova informação)
         is_followup_response = (pending_amount and 
@@ -312,7 +327,7 @@ async def chat_with_assistant(
                 elif is_followup_response:
                     # Se é resposta a pergunta, tentar extrair categoria da mensagem atual
                     if transaction_type == BillType.INCOME:
-                        # Categorias para receitas
+                        # Categorias para receitas - mapear palavras-chave para categorias
                         income_category_map = {
                             'salário': 'investimentos',
                             'salario': 'investimentos',
@@ -336,14 +351,20 @@ async def chat_with_assistant(
                             'acoes': 'investimentos',
                             'investimento': 'investimentos',
                             'reembolso': 'investimentos',
-                            'aluguel recebido': 'investimentos'
+                            'aluguel recebido': 'investimentos',
+                            'aluguel': 'investimentos',
+                            'outras': 'outras'
                         }
                         for keyword, category in income_category_map.items():
                             if keyword in message_lower:
                                 final_category = category
                                 break
+                        # Se não encontrar categoria, NÃO criar - deve perguntar novamente
                         if not final_category:
-                            final_category = "investimentos"  # Padrão para receitas
+                            return ChatResponse(
+                                response=f"Entendi! Você recebeu R$ {final_amount:.2f}. De onde veio essa receita? (ex: salário, freelance, vendas, comissão, bônus, reembolso, aluguel recebido, investimentos, outras)",
+                                action="ask_for_info"
+                            )
                     else:
                         # Categorias para despesas
                         category_map = {
@@ -374,38 +395,18 @@ async def chat_with_assistant(
                         if not final_category:
                             final_category = "outras"
                 elif transaction_type == BillType.INCOME:
-                    # Para receitas, tentar categorizar baseado na mensagem
-                    income_keywords = {
-                        'salário': 'investimentos',
-                        'salario': 'investimentos',
-                        'sal': 'investimentos',
-                        'freelance': 'investimentos',
-                        'freela': 'investimentos',
-                        'vendas': 'investimentos',
-                        'comissão': 'investimentos',
-                        'comissao': 'investimentos',
-                        'bonus': 'investimentos',
-                        'bônus': 'investimentos',
-                        'renda': 'investimentos',
-                        'dividendos': 'investimentos',
-                        'juros': 'investimentos',
-                        'aplicação': 'investimentos',
-                        'aplicacao': 'investimentos',
-                        'poupança': 'investimentos',
-                        'poupanca': 'investimentos',
-                        'ações': 'investimentos',
-                        'acoes': 'investimentos',
-                        'investimento': 'investimentos',
-                        'reembolso': 'investimentos',
-                        'aluguel recebido': 'investimentos'
-                    }
-                    for keyword, category in income_keywords.items():
-                        if keyword in message_lower:
-                            final_category = category
-                            break
-                    # Se não encontrar categoria específica, usar "investimentos" como padrão (não "outras")
-                    if not final_category:
-                        final_category = "investimentos"
+                    # Para receitas SEM categoria, SEMPRE perguntar - NÃO aceitar sem categoria
+                    return ChatResponse(
+                        response=f"Entendi! Você recebeu R$ {final_amount:.2f}. De onde veio essa receita? (ex: salário, freelance, vendas, comissão, bônus, reembolso, aluguel recebido, investimentos, outras)",
+                        action="ask_for_info"
+                    )
+                
+                # VALIDAÇÃO CRÍTICA: Receitas SEMPRE precisam de categoria - não aceitar sem categoria
+                if transaction_type == BillType.INCOME and not final_category:
+                    return ChatResponse(
+                        response=f"Entendi! Você recebeu R$ {final_amount:.2f}. De onde veio essa receita? (ex: salário, freelance, vendas, comissão, bônus, reembolso, aluguel recebido, investimentos, outras)",
+                        action="ask_for_info"
+                    )
                 
                 # Se for parcelamento, criar múltiplas transações
                 if final_is_installment and final_installment_total and final_installment_total > 1:
