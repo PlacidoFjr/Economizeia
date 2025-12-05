@@ -311,35 +311,101 @@ async def chat_with_assistant(
                     final_category = expense_data.get("category")
                 elif is_followup_response:
                     # Se é resposta a pergunta, tentar extrair categoria da mensagem atual
-                    category_map = {
-                        'compras': 'compras',
-                        'compra': 'compras',
-                        'shopping': 'compras',
-                        'roupas': 'vestuario',
-                        'roupa': 'vestuario',
-                        'vestuário': 'vestuario',
-                        'energia': 'moradia',
-                        'luz': 'moradia',
-                        'água': 'moradia',
-                        'alimentação': 'alimentacao',
-                        'comida': 'alimentacao',
-                        'restaurante': 'alimentacao',
-                        'transporte': 'transporte',
-                        'uber': 'transporte',
-                        'saúde': 'saude',
-                        'médico': 'saude',
-                        'lazer': 'lazer',
-                        'educação': 'educacao',
-                        'educacao': 'educacao'
+                    if transaction_type == BillType.INCOME:
+                        # Categorias para receitas
+                        income_category_map = {
+                            'salário': 'investimentos',
+                            'salario': 'investimentos',
+                            'sal': 'investimentos',
+                            'freelance': 'investimentos',
+                            'freela': 'investimentos',
+                            'vendas': 'investimentos',
+                            'venda': 'investimentos',
+                            'comissão': 'investimentos',
+                            'comissao': 'investimentos',
+                            'bonus': 'investimentos',
+                            'bônus': 'investimentos',
+                            'renda': 'investimentos',
+                            'dividendos': 'investimentos',
+                            'juros': 'investimentos',
+                            'aplicação': 'investimentos',
+                            'aplicacao': 'investimentos',
+                            'poupança': 'investimentos',
+                            'poupanca': 'investimentos',
+                            'ações': 'investimentos',
+                            'acoes': 'investimentos',
+                            'investimento': 'investimentos',
+                            'reembolso': 'investimentos',
+                            'aluguel recebido': 'investimentos'
+                        }
+                        for keyword, category in income_category_map.items():
+                            if keyword in message_lower:
+                                final_category = category
+                                break
+                        if not final_category:
+                            final_category = "investimentos"  # Padrão para receitas
+                    else:
+                        # Categorias para despesas
+                        category_map = {
+                            'compras': 'compras',
+                            'compra': 'compras',
+                            'shopping': 'compras',
+                            'roupas': 'vestuario',
+                            'roupa': 'vestuario',
+                            'vestuário': 'vestuario',
+                            'energia': 'moradia',
+                            'luz': 'moradia',
+                            'água': 'moradia',
+                            'alimentação': 'alimentacao',
+                            'comida': 'alimentacao',
+                            'restaurante': 'alimentacao',
+                            'transporte': 'transporte',
+                            'uber': 'transporte',
+                            'saúde': 'saude',
+                            'médico': 'saude',
+                            'lazer': 'lazer',
+                            'educação': 'educacao',
+                            'educacao': 'educacao'
+                        }
+                        for keyword, category in category_map.items():
+                            if keyword in message_lower:
+                                final_category = category
+                                break
+                        if not final_category:
+                            final_category = "outras"
+                elif transaction_type == BillType.INCOME:
+                    # Para receitas, tentar categorizar baseado na mensagem
+                    income_keywords = {
+                        'salário': 'investimentos',
+                        'salario': 'investimentos',
+                        'sal': 'investimentos',
+                        'freelance': 'investimentos',
+                        'freela': 'investimentos',
+                        'vendas': 'investimentos',
+                        'comissão': 'investimentos',
+                        'comissao': 'investimentos',
+                        'bonus': 'investimentos',
+                        'bônus': 'investimentos',
+                        'renda': 'investimentos',
+                        'dividendos': 'investimentos',
+                        'juros': 'investimentos',
+                        'aplicação': 'investimentos',
+                        'aplicacao': 'investimentos',
+                        'poupança': 'investimentos',
+                        'poupanca': 'investimentos',
+                        'ações': 'investimentos',
+                        'acoes': 'investimentos',
+                        'investimento': 'investimentos',
+                        'reembolso': 'investimentos',
+                        'aluguel recebido': 'investimentos'
                     }
-                    for keyword, category in category_map.items():
+                    for keyword, category in income_keywords.items():
                         if keyword in message_lower:
                             final_category = category
                             break
+                    # Se não encontrar categoria específica, usar "investimentos" como padrão (não "outras")
                     if not final_category:
-                        final_category = "outras"
-                elif transaction_type == BillType.INCOME:
-                    final_category = "outras"  # Receitas geralmente não têm categoria específica
+                        final_category = "investimentos"
                 
                 # Se for parcelamento, criar múltiplas transações
                 if final_is_installment and final_installment_total and final_installment_total > 1:

@@ -209,6 +209,7 @@ O modelo deve reconhecer datas absolutas, relativas e textuais.
 
 Usar palavras-chave do texto para classificar em UMA das categorias:
 
+**Para DESPESAS:**
 - **alimentacao**: comida, restaurante, supermercado, mercado, padaria, lanche, delivery, ifood
 - **moradia**: aluguel, condomínio, água, luz, energia, gás, internet, telefone, IPTU
 - **servicos**: serviço, manutenção, reparo, conserto, limpeza, técnico
@@ -218,11 +219,16 @@ Usar palavras-chave do texto para classificar em UMA das categorias:
 - **compras**: compras, shopping, loja, adquirir, mercado, supermercado
 - **lazer**: cinema, show, festa, diversão, jogos, entretenimento
 - **educacao**: escola, curso, faculdade, universidade, livro, material escolar
-- **investimentos**: investimento, aplicação, poupança, ações
-- **outras**: qualquer item não mapeado nas categorias acima
+- **outras**: qualquer despesa não mapeada nas categorias acima
 
-**Regra obrigatória:**
-- Nunca classificar como "outras" quando existir categoria mais específica
+**Para RECEITAS:**
+- **investimentos**: salário, salario, freelance, freela, vendas, comissão, comissao, bonus, bônus, renda, dividendos, juros, aplicação, aplicacao, poupança, poupanca, ações, acoes, investimento, reembolso, aluguel recebido, emprestimo, empréstimo
+- **outras**: qualquer receita não mapeada (use apenas se realmente não se encaixar em investimentos)
+
+**Regras obrigatórias:**
+- Para RECEITAS: sempre usar "investimentos" quando for salário, freelance, vendas, comissões, bônus, dividendos, juros, aplicações, etc.
+- Para DESPESAS: nunca classificar como "outras" quando existir categoria mais específica
+- Receitas de salário, freelance, vendas, comissões devem SEMPRE ser categorizadas como "investimentos"
 
 ### 2.4. EMISSOR / FORNECEDOR:
 
