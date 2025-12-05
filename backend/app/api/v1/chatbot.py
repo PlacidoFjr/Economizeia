@@ -42,6 +42,46 @@ async def chat_with_assistant(
     Can also create expenses/bills from natural language commands.
     """
     try:
+        # Verificar limite de uso do chatbot
+        notif_prefs = current_user.notif_prefs or {}
+        is_premium = notif_prefs.get("is_premium", False)
+        
+        # Limites: Free = 25 mensagens/mês, Premium = ilimitado
+        FREE_LIMIT = 25
+        PREMIUM_LIMIT = 1000  # Praticamente ilimitado
+        
+        # Obter contador atual e data de reset
+        chatbot_messages_this_month = notif_prefs.get("chatbot_messages_this_month", 0)
+        chatbot_month_reset_date = notif_prefs.get("chatbot_month_reset_date")
+        
+        # Verificar se precisa resetar o contador (novo mês)
+        today = date.today()
+        current_month = today.replace(day=1)  # Primeiro dia do mês atual
+        
+        if not chatbot_month_reset_date or datetime.fromisoformat(chatbot_month_reset_date).date().replace(day=1) < current_month:
+            # Resetar contador para novo mês
+            chatbot_messages_this_month = 0
+            chatbot_month_reset_date = current_month.isoformat()
+            notif_prefs["chatbot_messages_this_month"] = 0
+            notif_prefs["chatbot_month_reset_date"] = chatbot_month_reset_date
+            current_user.notif_prefs = notif_prefs
+            db.commit()
+        
+        # Verificar limite
+        limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
+        if chatbot_messages_this_month >= limit:
+            remaining_days = (current_month + relativedelta(months=1) - today).days
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Limite de {limit} mensagens do chatbot atingido este mês. {'Faça upgrade para Premium para uso ilimitado.' if not is_premium else 'Limite mensal atingido.'} O limite será resetado em {remaining_days} dia(s)."
+            )
+        
+        # Incrementar contador
+        chatbot_messages_this_month += 1
+        notif_prefs["chatbot_messages_this_month"] = chatbot_messages_this_month
+        current_user.notif_prefs = notif_prefs
+        db.commit()
+        
         # Verificar se deve usar Gemini ou Ollama
         gemini_service = get_gemini_service()
         ai_service = gemini_service if gemini_service else ollama_service

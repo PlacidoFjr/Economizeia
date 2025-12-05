@@ -75,7 +75,9 @@ class User(Base):
         "reminder_days": [7, 3, 1],
         "is_premium": False,  # Plano premium (relatório diário)
         "daily_report_enabled": False,  # Relatório diário (apenas premium)
-        "spending_alert_threshold": 80.0  # Alerta quando gastos > 80% da receita
+        "spending_alert_threshold": 80.0,  # Alerta quando gastos > 80% da receita
+        "chatbot_messages_this_month": 0,  # Contador de mensagens do chatbot no mês atual
+        "chatbot_month_reset_date": None  # Data de reset do contador (primeiro dia do mês)
     })
 
     # Relationships
