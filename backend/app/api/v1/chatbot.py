@@ -111,11 +111,17 @@ async def chat_with_assistant(
         # Verificar se é comando de criação (despesa ou receita)
         is_create_command = expense_data and expense_data.get("action") in ["create_expense", "create_income"]
         
-        # Se o prompt retornou create_income, forçar tipo como INCOME
+        # PRIORIDADE 1: Se o prompt retornou uma ação, usar ela (prompt tem prioridade sobre detecção local)
         if expense_data and expense_data.get("action") == "create_income":
             transaction_type = BillType.INCOME
             is_income = True
             is_expense = False
+            logger.info("✅ Prompt retornou create_income - forçando tipo como INCOME")
+        elif expense_data and expense_data.get("action") == "create_expense":
+            transaction_type = BillType.EXPENSE
+            is_income = False
+            is_expense = True
+            logger.info("✅ Prompt retornou create_expense - forçando tipo como EXPENSE")
         
         if is_create_command or (is_confirmation and has_pending_transaction and pending_amount):
             # Criar transação (despesa ou receita)
