@@ -198,7 +198,13 @@ async def chat_with_assistant(
                     action="ask_for_info"
                 )
         
-        if is_create_command or (is_confirmation and has_pending_transaction and pending_amount):
+        # Verificar se é resposta a uma pergunta anterior (tem valor pendente e nova informação)
+        is_followup_response = (pending_amount and 
+                               (expense_data and expense_data.get("category") or 
+                                expense_data and expense_data.get("issuer") or
+                                any(cat in message_lower for cat in ['compras', 'roupas', 'energia', 'alimentação', 'transporte', 'saúde', 'lazer', 'educação'])))
+        
+        if is_create_command or (is_confirmation and has_pending_transaction and pending_amount) or is_followup_response:
             # Criar transação (despesa ou receita)
             try:
                 # Usar valor do expense_data ou do histórico
@@ -228,11 +234,19 @@ async def chat_with_assistant(
                     except:
                         due_date = date.today()
                 
-                # Determinar issuer baseado no tipo e histórico
+                # Determinar issuer baseado no tipo e histórico (priorizar expense_data, depois histórico, depois padrão)
                 if expense_data and expense_data.get("issuer"):
                     default_issuer = expense_data.get("issuer")
                 elif pending_issuer:
                     default_issuer = pending_issuer
+                elif is_followup_response and message_lower:
+                    # Se é resposta a pergunta, tentar extrair emissor da mensagem atual
+                    # Procurar por nomes de estabelecimentos na mensagem
+                    words = message_lower.split()
+                    if len(words) <= 5:  # Mensagens curtas provavelmente são nomes
+                        default_issuer = message_lower.title()
+                    else:
+                        default_issuer = "Despesa Manual" if transaction_type == BillType.EXPENSE else "Receita Manual"
                 elif transaction_type == BillType.INCOME:
                     default_issuer = "Receita Manual"
                 else:
@@ -242,10 +256,39 @@ async def chat_with_assistant(
                 # Usar o amount calculado (pode vir de expense_data ou pending_amount)
                 final_amount = amount if amount else (expense_data.get("amount") if expense_data else 0)
                 
-                # Extrair categoria do expense_data ou usar padrão
+                # Extrair categoria do expense_data, mensagem atual ou usar padrão
                 final_category = None
                 if expense_data and expense_data.get("category"):
                     final_category = expense_data.get("category")
+                elif is_followup_response:
+                    # Se é resposta a pergunta, tentar extrair categoria da mensagem atual
+                    category_map = {
+                        'compras': 'compras',
+                        'compra': 'compras',
+                        'shopping': 'compras',
+                        'roupas': 'vestuario',
+                        'roupa': 'vestuario',
+                        'vestuário': 'vestuario',
+                        'energia': 'moradia',
+                        'luz': 'moradia',
+                        'água': 'moradia',
+                        'alimentação': 'alimentacao',
+                        'comida': 'alimentacao',
+                        'restaurante': 'alimentacao',
+                        'transporte': 'transporte',
+                        'uber': 'transporte',
+                        'saúde': 'saude',
+                        'médico': 'saude',
+                        'lazer': 'lazer',
+                        'educação': 'educacao',
+                        'educacao': 'educacao'
+                    }
+                    for keyword, category in category_map.items():
+                        if keyword in message_lower:
+                            final_category = category
+                            break
+                    if not final_category:
+                        final_category = "outras"
                 elif transaction_type == BillType.INCOME:
                     final_category = "outras"  # Receitas geralmente não têm categoria específica
                 
