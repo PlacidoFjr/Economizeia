@@ -147,43 +147,66 @@ async def upload_bill(
                 
                 logger.info(f"OCR concluído para boleto {bill.id}. Texto extraído: {len(ocr_text)} caracteres, confiança: {ocr_confidence:.2f}")
                 
-                # Se houver texto extraído, tentar extrair campos com Ollama (prioridade) ou Gemini
+                # Se houver texto extraído, tentar extrair campos
                 if ocr_text and len(ocr_text.strip()) > 10:
                     try:
-                        import asyncio
-                        from app.services.ollama_service import ollama_service
-                        from app.services.gemini_service import get_gemini_service
+                        # PRIMEIRO: Tentar extração com regex específico para boletos brasileiros (rápido e preciso)
+                        from app.services.bill_extractor import brazilian_bill_extractor
+                        regex_extracted = brazilian_bill_extractor.extract_fields(ocr_text)
                         
-                        # Priorizar Ollama, usar Gemini apenas se Ollama não estiver disponível
-                        # Verificar se Ollama está configurado e acessível
-                        try:
-                            # Tentar usar Ollama primeiro
-                            ai_service = ollama_service
-                            logger.info(f"Usando Ollama para extração de campos do boleto {bill.id}")
-                        except:
-                            # Fallback para Gemini se Ollama não estiver disponível
-                            gemini_service = get_gemini_service()
-                            if gemini_service:
-                                ai_service = gemini_service
-                                logger.info(f"Ollama não disponível, usando Gemini para extração de campos do boleto {bill.id}")
+                        # Se regex extraiu campos essenciais com boa confiança, usar diretamente
+                        if regex_extracted.get("confidence", 0.0) >= 0.80:
+                            logger.info(f"Extraction via regex bem-sucedida (confiança: {regex_extracted['confidence']:.2f})")
+                            extracted = regex_extracted
+                        else:
+                            # Se regex não foi suficiente, usar AI (Ollama/Gemini) como fallback
+                            logger.info(f"Regex extraiu com confiança baixa ({regex_extracted.get('confidence', 0):.2f}), tentando AI...")
+                            import asyncio
+                            from app.services.ollama_service import ollama_service
+                            from app.services.gemini_service import get_gemini_service
+                            
+                            try:
+                                ai_service = ollama_service
+                                logger.info(f"Usando Ollama para extração de campos do boleto {bill.id}")
+                            except:
+                                gemini_service = get_gemini_service()
+                                if gemini_service:
+                                    ai_service = gemini_service
+                                    logger.info(f"Ollama não disponível, usando Gemini para extração de campos do boleto {bill.id}")
+                                else:
+                                    logger.warning(f"Nenhum serviço de IA disponível, usando resultado do regex")
+                                    extracted = regex_extracted
+                                    ai_service = None
+                            
+                            if ai_service:
+                                image_url = None
+                                try:
+                                    object_name_clean = s3_path.split("/", 1)[1] if "/" in s3_path else s3_path
+                                    image_url = storage_service.get_presigned_url(object_name_clean, expires_seconds=3600)
+                                except:
+                                    pass  # URL opcional
+                                
+                                ai_extracted = asyncio.run(
+                                    ai_service.extract_bill_fields(
+                                        ocr_text=ocr_text,
+                                        image_url=image_url,
+                                        metadata={"filename": file.filename}
+                                    )
+                                )
+                                
+                                # Combinar resultados: preferir regex para campos essenciais, AI para outros
+                                extracted = {
+                                    "issuer": regex_extracted.get("issuer") or ai_extracted.get("issuer"),
+                                    "amount": regex_extracted.get("amount") or ai_extracted.get("amount"),
+                                    "currency": "BRL",
+                                    "due_date": regex_extracted.get("due_date") or ai_extracted.get("due_date"),
+                                    "barcode": regex_extracted.get("barcode") or ai_extracted.get("barcode"),
+                                    "payment_place": None,
+                                    "confidence": max(regex_extracted.get("confidence", 0.0), ai_extracted.get("confidence", 0.0)),
+                                    "notes": ai_extracted.get("notes", "")
+                                }
                             else:
-                                logger.warning(f"Nenhum serviço de IA disponível para extração de campos")
-                                raise Exception("Nenhum serviço de IA disponível")
-                        
-                        image_url = None
-                        try:
-                            object_name_clean = s3_path.split("/", 1)[1] if "/" in s3_path else s3_path
-                            image_url = storage_service.get_presigned_url(object_name_clean, expires_seconds=3600)
-                        except:
-                            pass  # URL opcional
-                        
-                        extracted = asyncio.run(
-                            ai_service.extract_bill_fields(
-                                ocr_text=ocr_text,
-                                image_url=image_url,
-                                metadata={"filename": file.filename}
-                            )
-                        )
+                                extracted = regex_extracted
                         
                         document.extracted_json = extracted
                         
