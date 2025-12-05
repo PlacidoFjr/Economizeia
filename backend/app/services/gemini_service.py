@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Import condicional do Gemini
 try:
-    import google.generativeai as genai
+    import google.generativeai as genai  # type: ignore
     GEMINI_AVAILABLE = True
 except ImportError:
     GEMINI_AVAILABLE = False
