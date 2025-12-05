@@ -547,3 +547,25 @@ async def resend_verification(
     
     return {"message": "Se o email existir e não estiver verificado, um novo link será enviado."}
 
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    email_verified: bool
+    is_active: bool
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user)
+):
+    """Get current authenticated user information."""
+    return UserResponse(
+        id=str(current_user.id),
+        name=current_user.name,
+        email=current_user.email,
+        email_verified=current_user.email_verified,
+        is_active=current_user.is_active
+    )
+
