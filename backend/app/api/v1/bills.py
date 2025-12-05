@@ -416,6 +416,19 @@ async def get_bill(
     if ocr_text:
         ocr_text = mask_cpf_cnpj(ocr_text)
     
+    # Gerar URL da imagem do boleto (presigned URL)
+    image_url = None
+    if document and document.s3_path:
+        try:
+            from app.services.storage_service import storage_service
+            # Extrair object_name do s3_path (formato: bucket/object_name)
+            object_name = document.s3_path.split("/", 1)[1] if "/" in document.s3_path else document.s3_path
+            # Se for mock path, não tentar gerar URL
+            if not object_name.startswith("mock/"):
+                image_url = storage_service.get_presigned_url(object_name, expires_seconds=3600)
+        except Exception as e:
+            logger.warning(f"Erro ao gerar URL da imagem do boleto: {e}")
+    
     return {
         "id": str(bill.id),
         "issuer": bill.issuer,
@@ -429,6 +442,7 @@ async def get_bill(
         "category": bill.category,
         "ocr_text": ocr_text,
         "extracted_json": document.extracted_json if document else None,
+        "image_url": image_url,  # URL da imagem do boleto
         "created_at": bill.created_at.isoformat() if bill.created_at else None
     }
 

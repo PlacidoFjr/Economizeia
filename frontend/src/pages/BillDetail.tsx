@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { useState } from 'react'
-import { Check, X, Calendar, DollarSign, ArrowLeft, FileText } from 'lucide-react'
+import { Check, X, Calendar, DollarSign, ArrowLeft, FileText, Image as ImageIcon } from 'lucide-react'
 import { translateStatus } from '../utils/translations'
 
 export default function BillDetail() {
@@ -141,6 +141,31 @@ export default function BillDetail() {
             </p>
           </div>
         </div>
+
+        {/* Imagem do Boleto */}
+        {bill.image_url && !bill.image_url.startsWith('#') && (
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-2 block flex items-center">
+              <ImageIcon className="w-4 h-4 mr-1" />
+              Imagem do Boleto
+            </label>
+            <div className="bg-white p-2 rounded border border-gray-300">
+              <img
+                src={bill.image_url}
+                alt="Boleto"
+                className="w-full h-auto rounded border border-gray-200 max-h-96 object-contain"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.style.display = 'none'
+                  const parent = target.parentElement
+                  if (parent) {
+                    parent.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Imagem não disponível</p>'
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {bill.barcode && (
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
