@@ -1590,6 +1590,586 @@ Equipe EconomizeIA
             db.commit()
         
         return sent
+    
+    async def send_spending_alert(
+        self,
+        db: Session,
+        user: User,
+        current_expenses: float,
+        monthly_income: float,
+        percentage_used: float
+    ) -> bool:
+        """Send alert when user is spending too much."""
+        if not user.notif_prefs.get("email_enabled", True):
+            return False
+        
+        subject = f"⚠️ Atenção: Você está gastando muito! - EconomizeIA"
+        
+        # Calculate remaining
+        remaining = monthly_income - current_expenses
+        remaining_percent = (remaining / monthly_income * 100) if monthly_income > 0 else 0
+        
+        # Alert level
+        if percentage_used >= 100:
+            alert_level = "crítico"
+            alert_color = "#dc2626"
+            alert_icon = "🔴"
+            alert_message = "Você já ultrapassou sua receita mensal!"
+        elif percentage_used >= 90:
+            alert_level = "alto"
+            alert_color = "#f59e0b"
+            alert_icon = "🟠"
+            alert_message = "Você está usando mais de 90% da sua receita!"
+        else:
+            alert_level = "atenção"
+            alert_color = "#fbbf24"
+            alert_icon = "🟡"
+            alert_message = "Você está usando mais de 80% da sua receita!"
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="color-scheme" content="light dark">
+            <meta name="supported-color-schemes" content="light dark">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+            <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
+                <tr>
+                    <td align="center" style="padding: 40px 20px;">
+                        <table role="presentation" style="max-width: 650px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                            
+                            <!-- Header -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, {alert_color} 0%, {alert_color}dd 100%); padding: 50px 40px; text-align: center;">
+                                    <img src="{settings.FRONTEND_URL or 'http://localhost:3000'}/logo.png" alt="EconomizeIA" style="max-width: 120px; height: auto; margin-bottom: 16px;" />
+                                    <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                        {alert_icon} Alerta de Gastos
+                                    </h1>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 40px;">
+                                    <p style="color: #374151; font-size: 18px; font-weight: 600; margin: 0 0 24px 0;">
+                                        Olá, {user.name}!
+                                    </p>
+                                    
+                                    <div style="background-color: #fef3c7; border-left: 4px solid {alert_color}; padding: 20px; border-radius: 8px; margin-bottom: 32px;">
+                                        <p style="color: #92400e; font-size: 16px; font-weight: 600; margin: 0 0 8px 0;">
+                                            {alert_message}
+                                        </p>
+                                        <p style="color: #78350f; font-size: 14px; margin: 0;">
+                                            Recomendamos revisar seus gastos e criar um plano de economia.
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Stats -->
+                                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+                                        <h2 style="color: #111827; font-size: 20px; font-weight: 700; margin: 0 0 24px 0; text-align: center;">
+                                            Resumo Financeiro do Mês
+                                        </h2>
+                                        
+                                        <div style="margin-bottom: 20px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #6b7280; font-size: 15px;">Receita Total</span>
+                                                <span style="color: #059669; font-size: 18px; font-weight: 700;">R$ {monthly_income:,.2f}</span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div style="margin-bottom: 20px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #6b7280; font-size: 15px;">Gastos Atuais</span>
+                                                <span style="color: {alert_color}; font-size: 18px; font-weight: 700;">R$ {current_expenses:,.2f}</span>
+                                            </div>
+                                            <div style="background-color: #e5e7eb; border-radius: 4px; height: 12px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, {alert_color} 0%, {alert_color}dd 100%); height: 100%; width: {min(100, percentage_used):.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                            <p style="color: #6b7280; font-size: 13px; margin: 8px 0 0 0; text-align: center;">
+                                                {percentage_used:.1f}% da receita utilizada
+                                            </p>
+                                        </div>
+                                        
+                                        <div style="border-top: 2px solid #e5e7eb; padding-top: 20px; margin-top: 20px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <span style="color: #111827; font-size: 16px; font-weight: 600;">Saldo Restante</span>
+                                                <span style="color: {'#059669' if remaining >= 0 else '#dc2626'}; font-size: 20px; font-weight: 700;">
+                                                    R$ {remaining:,.2f}
+                                                </span>
+                                            </div>
+                                            <p style="color: #6b7280; font-size: 13px; margin: 8px 0 0 0;">
+                                                {remaining_percent:.1f}% da receita ainda disponível
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Recommendations -->
+                                    <div style="background-color: #eff6ff; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+                                        <h3 style="color: #1e40af; font-size: 18px; font-weight: 700; margin: 0 0 16px 0;">
+                                            💡 Dicas para Economizar
+                                        </h3>
+                                        <ul style="color: #1e3a8a; font-size: 15px; margin: 0; padding-left: 20px;">
+                                            <li style="margin-bottom: 8px;">Revise suas despesas e identifique gastos desnecessários</li>
+                                            <li style="margin-bottom: 8px;">Crie metas de economia para objetivos específicos</li>
+                                            <li style="margin-bottom: 8px;">Use o chatbot para acompanhar seus gastos em tempo real</li>
+                                            <li style="margin-bottom: 0;">Configure lembretes para pagamentos importantes</li>
+                                        </ul>
+                                    </div>
+                                    
+                                    <!-- CTA -->
+                                    <div style="text-align: center; margin-top: 32px;">
+                                        <a href="{settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard" 
+                                           style="display: inline-block; background: linear-gradient(135deg, #1f2937 0%, #374151 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                            Ver Meu Dashboard →
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background-color: #f9fafb; padding: 30px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
+                                    <p style="color: #6b7280; font-size: 13px; margin: 0 0 8px 0;">
+                                        Este é um alerta automático do EconomizeIA
+                                    </p>
+                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+                                        Você pode ajustar os limites de alerta nas configurações do seu perfil
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        Olá, {user.name}!
+
+        {alert_message}
+
+        Resumo Financeiro do Mês:
+        - Receita Total: R$ {monthly_income:,.2f}
+        - Gastos Atuais: R$ {current_expenses:,.2f}
+        - Saldo Restante: R$ {remaining:,.2f}
+        - Percentual Utilizado: {percentage_used:.1f}%
+
+        Dicas para Economizar:
+        - Revise suas despesas e identifique gastos desnecessários
+        - Crie metas de economia para objetivos específicos
+        - Use o chatbot para acompanhar seus gastos em tempo real
+        - Configure lembretes para pagamentos importantes
+
+        Acesse seu dashboard: {settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard
+        """
+        
+        sent = await self.send_email(user.email, subject, text_body, html_body)
+        
+        if sent:
+            # Log notification
+            notification = Notification(
+                id=uuid.uuid4(),
+                user_id=user.id,
+                type=NotificationType.ANOMALY,
+                channel=NotificationChannel.EMAIL,
+                sent_at=datetime.utcnow(),
+                payload={
+                    "alert_type": "spending_alert",
+                    "current_expenses": current_expenses,
+                    "monthly_income": monthly_income,
+                    "percentage_used": percentage_used,
+                    "alert_level": alert_level
+                },
+                status="sent"
+            )
+            db.add(notification)
+            db.commit()
+        
+        return sent
+    
+    async def send_weekly_report(
+        self,
+        db: Session,
+        user: User,
+        week_start: date,
+        week_end: date,
+        weekly_data: Dict[str, Any]
+    ) -> bool:
+        """Send weekly financial report to user."""
+        if not user.notif_prefs.get("email_enabled", True):
+            return False
+        
+        subject = f"📅 Seu Relatório Semanal ({week_start.strftime('%d/%m')} a {week_end.strftime('%d/%m')}) - EconomizeIA"
+        
+        # Extract data
+        total_income = weekly_data.get("total_income", 0.0)
+        total_expenses = weekly_data.get("total_expenses", 0.0)
+        balance = weekly_data.get("balance", 0.0)
+        top_categories = weekly_data.get("top_categories", [])
+        comparison_previous = weekly_data.get("comparison_previous", {})
+        
+        # Calculate percentage change
+        income_change = comparison_previous.get("income_change_percent", 0.0)
+        expenses_change = comparison_previous.get("expenses_change_percent", 0.0)
+        
+        # Balance indicator
+        balance_color = "#059669" if balance >= 0 else "#dc2626"
+        balance_icon = "📈" if balance >= 0 else "📉"
+        balance_text = "Superávit" if balance >= 0 else "Déficit"
+        
+        # Build categories HTML
+        categories_html = ""
+        if top_categories:
+            for i, cat in enumerate(top_categories[:5]):
+                margin_bottom = "16px" if i < len(top_categories) - 1 else "0px"
+                width_percent = min(100, (cat.get("total", 0) / total_expenses * 100) if total_expenses > 0 else 0)
+                categories_html += f'''
+                                        <div style="margin-bottom: {margin_bottom};">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #374151; font-size: 15px; font-weight: 600;">{cat.get("name", "Sem categoria")}</span>
+                                                <span style="color: #111827; font-size: 16px; font-weight: 700;">R$ {cat.get("total", 0):,.2f}</span>
+                                            </div>
+                                            <div style="background-color: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%); height: 100%; width: {width_percent:.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                        </div>
+                                        '''
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="color-scheme" content="light dark">
+            <meta name="supported-color-schemes" content="light dark">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+            <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
+                <tr>
+                    <td align="center" style="padding: 40px 20px;">
+                        <table role="presentation" style="max-width: 650px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                            
+                            <!-- Header -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 50px 40px; text-align: center;">
+                                    <img src="{settings.FRONTEND_URL or 'http://localhost:3000'}/logo.png" alt="EconomizeIA" style="max-width: 120px; height: auto; margin-bottom: 16px;" />
+                                    <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                        📅 Relatório Semanal
+                                    </h1>
+                                    <p style="color: #d1d5db; font-size: 16px; margin: 8px 0 0 0;">
+                                        {week_start.strftime('%d/%m/%Y')} a {week_end.strftime('%d/%m/%Y')}
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 40px;">
+                                    <p style="color: #374151; font-size: 18px; font-weight: 600; margin: 0 0 24px 0;">
+                                        Olá, {user.name}!
+                                    </p>
+                                    
+                                    <p style="color: #6b7280; font-size: 16px; margin: 0 0 32px 0;">
+                                        Aqui está um resumo das suas finanças desta semana:
+                                    </p>
+                                    
+                                    <!-- Stats Cards -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 32px;">
+                                        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; padding: 24px; text-align: center;">
+                                            <p style="color: #ffffff; font-size: 14px; font-weight: 600; margin: 0 0 8px 0; opacity: 0.9;">Receitas</p>
+                                            <p style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0;">R$ {total_income:,.2f}</p>
+                                            {f'<p style="color: #ffffff; font-size: 12px; margin: 8px 0 0 0; opacity: 0.8;">{"+" if income_change >= 0 else ""}{income_change:.1f}% vs semana anterior</p>' if income_change != 0 else ''}
+                                        </div>
+                                        <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 8px; padding: 24px; text-align: center;">
+                                            <p style="color: #ffffff; font-size: 14px; font-weight: 600; margin: 0 0 8px 0; opacity: 0.9;">Despesas</p>
+                                            <p style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0;">R$ {total_expenses:,.2f}</p>
+                                            {f'<p style="color: #ffffff; font-size: 12px; margin: 8px 0 0 0; opacity: 0.8;">{"+" if expenses_change >= 0 else ""}{expenses_change:.1f}% vs semana anterior</p>' if expenses_change != 0 else ''}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Balance -->
+                                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 24px; margin-bottom: 32px; text-align: center; border: 2px solid {balance_color};">
+                                        <p style="color: #6b7280; font-size: 14px; font-weight: 600; margin: 0 0 8px 0;">Saldo da Semana</p>
+                                        <p style="color: {balance_color}; font-size: 32px; font-weight: 700; margin: 0;">
+                                            {balance_icon} {balance_text}
+                                        </p>
+                                        <p style="color: {balance_color}; font-size: 28px; font-weight: 700; margin: 8px 0 0 0;">
+                                            R$ {abs(balance):,.2f}
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Top Categories -->
+                                    {f'''
+                                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+                                        <h3 style="color: #111827; font-size: 18px; font-weight: 700; margin: 0 0 20px 0;">Principais Categorias</h3>
+                                        {categories_html}
+                                    </div>
+                                    ''' if top_categories else ''}
+                                    
+                                    <!-- CTA -->
+                                    <div style="text-align: center; margin-top: 32px;">
+                                        <a href="{settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard" 
+                                           style="display: inline-block; background: linear-gradient(135deg, #1f2937 0%, #374151 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                            Ver Dashboard Completo →
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background-color: #f9fafb; padding: 30px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
+                                    <p style="color: #6b7280; font-size: 13px; margin: 0 0 8px 0;">
+                                        Este é um relatório automático semanal do EconomizeIA
+                                    </p>
+                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+                                        Você receberá este relatório toda segunda-feira
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        Olá, {user.name}!
+
+        Relatório Semanal ({week_start.strftime('%d/%m/%Y')} a {week_end.strftime('%d/%m/%Y')})
+
+        Resumo:
+        - Receitas: R$ {total_income:,.2f}
+        - Despesas: R$ {total_expenses:,.2f}
+        - Saldo: R$ {balance:,.2f} ({balance_text})
+
+        Acesse seu dashboard: {settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard
+        """
+        
+        sent = await self.send_email(user.email, subject, text_body, html_body)
+        
+        if sent:
+            # Log notification
+            notification = Notification(
+                id=uuid.uuid4(),
+                user_id=user.id,
+                type=NotificationType.RECONCILIATION,
+                channel=NotificationChannel.EMAIL,
+                sent_at=datetime.utcnow(),
+                payload={
+                    "report_type": "weekly",
+                    "week_start": week_start.isoformat(),
+                    "week_end": week_end.isoformat(),
+                    "weekly_data": weekly_data
+                },
+                status="sent"
+            )
+            db.add(notification)
+            db.commit()
+        
+        return sent
+    
+    async def send_daily_report(
+        self,
+        db: Session,
+        user: User,
+        report_date: date,
+        daily_data: Dict[str, Any]
+    ) -> bool:
+        """Send daily financial report to user (PREMIUM ONLY)."""
+        # Verificar se é premium
+        if not user.notif_prefs.get("is_premium", False):
+            logger.info(f"⏭️ User {user.id} não é premium, pulando relatório diário")
+            return False
+        
+        if not user.notif_prefs.get("daily_report_enabled", False):
+            logger.info(f"⏭️ Relatório diário desabilitado para user {user.id}")
+            return False
+        
+        if not user.notif_prefs.get("email_enabled", True):
+            return False
+        
+        subject = f"📊 Seu Relatório Diário ({report_date.strftime('%d/%m/%Y')}) - EconomizeIA Premium"
+        
+        # Extract data
+        total_income = daily_data.get("total_income", 0.0)
+        total_expenses = daily_data.get("total_expenses", 0.0)
+        balance = daily_data.get("balance", 0.0)
+        transactions_count = daily_data.get("transactions_count", 0)
+        top_categories = daily_data.get("top_categories", [])
+        
+        # Balance indicator
+        balance_color = "#059669" if balance >= 0 else "#dc2626"
+        balance_icon = "📈" if balance >= 0 else "📉"
+        
+        # Build categories HTML
+        categories_html = ""
+        if top_categories:
+            for i, cat in enumerate(top_categories[:5]):
+                margin_bottom = "16px" if i < len(top_categories) - 1 else "0px"
+                width_percent = min(100, (cat.get("total", 0) / total_expenses * 100) if total_expenses > 0 else 0)
+                categories_html += f'''
+                                        <div style="margin-bottom: {margin_bottom};">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #374151; font-size: 15px; font-weight: 600;">{cat.get("name", "Sem categoria")}</span>
+                                                <span style="color: #111827; font-size: 16px; font-weight: 700;">R$ {cat.get("total", 0):,.2f}</span>
+                                            </div>
+                                            <div style="background-color: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%); height: 100%; width: {width_percent:.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                        </div>
+                                        '''
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="color-scheme" content="light dark">
+            <meta name="supported-color-schemes" content="light dark">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+            <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
+                <tr>
+                    <td align="center" style="padding: 40px 20px;">
+                        <table role="presentation" style="max-width: 650px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                            
+                            <!-- Header Premium -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 50px 40px; text-align: center;">
+                                    <img src="{settings.FRONTEND_URL or 'http://localhost:3000'}/logo.png" alt="EconomizeIA" style="max-width: 120px; height: auto; margin-bottom: 16px;" />
+                                    <div style="background-color: rgba(255,255,255,0.2); border-radius: 6px; padding: 6px 12px; display: inline-block; margin-bottom: 12px;">
+                                        <span style="color: #ffffff; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">⭐ Premium</span>
+                                    </div>
+                                    <h1 style="color: #ffffff; font-size: 28px; font-weight: 700; margin: 0; text-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                                        📊 Relatório Diário
+                                    </h1>
+                                    <p style="color: #fef3c7; font-size: 16px; margin: 8px 0 0 0;">
+                                        {report_date.strftime('%d/%m/%Y')}
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content -->
+                            <tr>
+                                <td style="padding: 40px;">
+                                    <p style="color: #374151; font-size: 18px; font-weight: 600; margin: 0 0 24px 0;">
+                                        Olá, {user.name}!
+                                    </p>
+                                    
+                                    <p style="color: #6b7280; font-size: 16px; margin: 0 0 32px 0;">
+                                        Aqui está um resumo das suas finanças de hoje:
+                                    </p>
+                                    
+                                    <!-- Stats Cards -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                                        <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 8px; padding: 20px; text-align: center;">
+                                            <p style="color: #ffffff; font-size: 13px; font-weight: 600; margin: 0 0 8px 0; opacity: 0.9;">Receitas Hoje</p>
+                                            <p style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0;">R$ {total_income:,.2f}</p>
+                                        </div>
+                                        <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius: 8px; padding: 20px; text-align: center;">
+                                            <p style="color: #ffffff; font-size: 13px; font-weight: 600; margin: 0 0 8px 0; opacity: 0.9;">Despesas Hoje</p>
+                                            <p style="color: #ffffff; font-size: 22px; font-weight: 700; margin: 0;">R$ {total_expenses:,.2f}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Balance -->
+                                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 24px; margin-bottom: 24px; text-align: center; border: 2px solid {balance_color};">
+                                        <p style="color: #6b7280; font-size: 14px; font-weight: 600; margin: 0 0 8px 0;">Saldo do Dia</p>
+                                        <p style="color: {balance_color}; font-size: 32px; font-weight: 700; margin: 0;">
+                                            {balance_icon} R$ {abs(balance):,.2f}
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Transactions Count -->
+                                    <div style="background-color: #eff6ff; border-radius: 8px; padding: 20px; margin-bottom: 32px; text-align: center;">
+                                        <p style="color: #1e40af; font-size: 14px; font-weight: 600; margin: 0 0 8px 0;">Transações Registradas</p>
+                                        <p style="color: #1e3a8a; font-size: 24px; font-weight: 700; margin: 0;">{transactions_count}</p>
+                                    </div>
+                                    
+                                    <!-- Top Categories -->
+                                    {f'''
+                                    <div style="background-color: #f9fafb; border-radius: 8px; padding: 24px; margin-bottom: 32px;">
+                                        <h3 style="color: #111827; font-size: 18px; font-weight: 700; margin: 0 0 20px 0;">Categorias de Hoje</h3>
+                                        {categories_html if top_categories else '<p style="color: #6b7280; font-size: 14px; margin: 0;">Nenhuma categoria registrada hoje.</p>'}
+                                    </div>
+                                    ''' if top_categories else ''}
+                                    
+                                    <!-- CTA -->
+                                    <div style="text-align: center; margin-top: 32px;">
+                                        <a href="{settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard" 
+                                           style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                            Ver Dashboard Completo →
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="background-color: #f9fafb; padding: 30px 40px; text-align: center; border-top: 1px solid #e5e7eb;">
+                                    <p style="color: #6b7280; font-size: 13px; margin: 0 0 8px 0;">
+                                        ⭐ Este é um benefício exclusivo do plano Premium
+                                    </p>
+                                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+                                        Você receberá este relatório todos os dias às 9:00
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+        Olá, {user.name}!
+
+        Relatório Diário ({report_date.strftime('%d/%m/%Y')})
+
+        Resumo de Hoje:
+        - Receitas: R$ {total_income:,.2f}
+        - Despesas: R$ {total_expenses:,.2f}
+        - Saldo: R$ {balance:,.2f}
+        - Transações: {transactions_count}
+
+        ⭐ Este é um benefício exclusivo do plano Premium
+
+        Acesse seu dashboard: {settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard
+        """
+        
+        sent = await self.send_email(user.email, subject, text_body, html_body)
+        
+        if sent:
+            # Log notification
+            notification = Notification(
+                id=uuid.uuid4(),
+                user_id=user.id,
+                type=NotificationType.RECONCILIATION,
+                channel=NotificationChannel.EMAIL,
+                sent_at=datetime.utcnow(),
+                payload={
+                    "report_type": "daily",
+                    "report_date": report_date.isoformat(),
+                    "daily_data": daily_data
+                },
+                status="sent"
+            )
+            db.add(notification)
+            db.commit()
+        
+        return sent
 
 
 notification_service = NotificationService()

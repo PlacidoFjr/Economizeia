@@ -32,9 +32,17 @@ celery_app.conf.update(
             'task': 'check_savings_goals_reminders',
             'schedule': 86400.0,  # Run daily at midnight UTC
         },
+        'send-weekly-reports': {
+            'task': 'send_weekly_reports',
+            'schedule': crontab(hour=9, minute=0, day_of_week=1),  # Run every Monday at 9:00 UTC (6:00 BRT)
+        },
         'send-monthly-reports': {
             'task': 'send_monthly_reports',
             'schedule': crontab(hour=9, minute=0, day_of_month=1),  # Run on 1st of each month at 9:00 UTC (6:00 BRT)
+        },
+        'send-daily-reports': {
+            'task': 'send_daily_reports',
+            'schedule': crontab(hour=9, minute=0),  # Run daily at 9:00 UTC (6:00 BRT) - apenas para premium
         },
     },
 )

@@ -101,18 +101,19 @@ def check_budget_alerts():
                     ).first()
                     
                     if not recent_alert:
+                        # Send spending alert
                         import asyncio
+                        percentage_used = (monthly_expenses / monthly_income * 100) if monthly_income > 0 else 0
                         asyncio.run(
-                            notification_service.send_budget_exceeded_alert(
+                            notification_service.send_spending_alert(
                                 db=db,
                                 user=user,
+                                current_expenses=monthly_expenses,
                                 monthly_income=monthly_income,
-                                monthly_expenses=monthly_expenses,
-                                monthly_balance=monthly_balance,
-                                percentage_over=percentage_over
+                                percentage_used=percentage_used
                             )
                         )
-                        logger.info(f"Sent budget exceeded alert to user {user.id}")
+                        logger.info(f"✅ Sent spending alert to user {user.id} ({percentage_used:.1f}% used)")
                         
             except Exception as e:
                 logger.error(f"Error checking budget for user {user.id}: {e}", exc_info=True)

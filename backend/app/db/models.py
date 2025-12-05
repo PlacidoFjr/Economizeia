@@ -72,7 +72,10 @@ class User(Base):
         "email_enabled": True,
         "sms_enabled": False,
         "push_enabled": True,
-        "reminder_days": [7, 3, 1]
+        "reminder_days": [7, 3, 1],
+        "is_premium": False,  # Plano premium (relatório diário)
+        "daily_report_enabled": False,  # Relatório diário (apenas premium)
+        "spending_alert_threshold": 80.0  # Alerta quando gastos > 80% da receita
     })
 
     # Relationships
