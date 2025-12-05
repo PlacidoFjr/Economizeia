@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from sqlalchemy.orm import Session
 from datetime import date, datetime
-from dateutil.relativedelta import relativedelta
+from dateutil.relativedelta import relativedelta  # type: ignore
 import uuid
 import logging
 import re
