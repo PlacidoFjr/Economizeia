@@ -39,18 +39,28 @@ export default function AddExpense() {
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/bills/create', data)
-      return response.data
+      try {
+        const response = await api.post('/bills/create', data)
+        return response.data
+      } catch (error: any) {
+        console.error('Erro ao criar despesa/receita:', error)
+        throw error
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('✅ Despesa/Receita criada com sucesso:', data)
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['finances'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       // Navegar para a página apropriada baseado no tipo
-      navigate(formData.type === 'income' ? '/finances' : '/bills')
+      const targetPath = formData.type === 'income' ? '/app/finances' : '/app/bills'
+      console.log('Navegando para:', targetPath)
+      navigate(targetPath)
     },
     onError: (error: any) => {
-      setErrors({ submit: error.response?.data?.detail || 'Erro ao criar despesa' })
+      console.error('❌ Erro na mutation:', error)
+      const errorMessage = error.response?.data?.detail || error.message || 'Erro ao criar despesa/receita'
+      setErrors({ submit: errorMessage })
     },
   })
 
@@ -284,7 +294,7 @@ export default function AddExpense() {
         <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
           <button
             type="button"
-            onClick={() => navigate('/bills')}
+            onClick={() => navigate('/app/bills')}
             className="w-full sm:w-auto px-6 py-2.5 sm:py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-semibold transition-colors flex items-center justify-center"
           >
             <X className="w-4 h-4 mr-2" />
