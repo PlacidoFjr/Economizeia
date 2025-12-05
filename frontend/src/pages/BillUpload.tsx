@@ -21,7 +21,10 @@ export default function BillUpload() {
       return response.data
     },
     onSuccess: (data) => {
-      navigate(`/bills/${data.bill_id}`)
+      navigate(`/app/bills/${data.bill_id}`)
+    },
+    onError: (error: any) => {
+      console.error('Erro no upload:', error)
     },
   })
 
@@ -168,7 +171,11 @@ export default function BillUpload() {
               </div>
               <div>
                 <p className="text-sm font-medium">Erro ao fazer upload</p>
-                <p className="text-xs text-red-600 mt-0.5">Tente novamente ou verifique o arquivo</p>
+                <p className="text-xs text-red-600 mt-0.5">
+                  {uploadMutation.error?.response?.data?.detail || 
+                   uploadMutation.error?.message || 
+                   'Tente novamente ou verifique o arquivo'}
+                </p>
               </div>
             </div>
           </div>
