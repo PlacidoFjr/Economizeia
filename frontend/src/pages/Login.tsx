@@ -40,6 +40,13 @@ export default function Login() {
     e.preventDefault()
     setLoading(true)
 
+    // Verificar conexão antes de tentar fazer login
+    if (!navigator.onLine) {
+      setLoading(false)
+      showToast('Sem conexão com a internet. Verifique sua conexão e tente novamente.', 'error', 8000)
+      return
+    }
+
     try {
       await login(email, password)
       showToast('Login realizado com sucesso!', 'success')
@@ -63,8 +70,8 @@ export default function Login() {
         errorMessage = 'Email ou senha incorretos. Verifique suas credenciais e tente novamente.'
       } else if (backendMessage.includes('inativa') || backendMessage.includes('inativo')) {
         errorMessage = 'Sua conta está inativa. Entre em contato com o suporte para mais informações.'
-      } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada')) {
-        errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.'
+      } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada') || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK') {
+        errorMessage = 'Sem conexão com a internet ou servidor indisponível. Verifique sua conexão e tente novamente.'
       } else if (statusCode === 401) {
         errorMessage = 'Senha incorreta. Verifique sua senha e tente novamente.'
       } else if (statusCode === 403) {

@@ -45,11 +45,30 @@ api.interceptors.response.use(
     })
 
     // Tratamento de timeout ou erro de conexão
-    if (error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) {
-      const errorMessage = API_BASE_URL.startsWith('http') 
-        ? `Não foi possível conectar ao servidor (${API_BASE_URL}). Verifique se o backend está rodando e se a URL está correta.`
-        : 'URL da API não configurada. Configure VITE_API_URL no Vercel → Settings → Environment Variables.'
-      console.error('❌ Erro de conexão:', errorMessage)
+    if (error.code === 'ECONNABORTED' || error.code === 'ERR_NETWORK' || error.code === 'ERR_INTERNET_DISCONNECTED' || error.message === 'Network Error' || !error.response) {
+      // Verificar se está offline
+      if (!navigator.onLine) {
+        const errorMessage = 'Sem conexão com a internet. Verifique sua conexão e tente novamente.'
+        console.error('❌ Sem conexão:', errorMessage)
+        return Promise.reject(new Error(errorMessage))
+      }
+      
+      // Se está online mas não consegue conectar, pode ser problema no servidor ou URL incorreta
+      let errorMessage = ''
+      if (!API_BASE_URL || API_BASE_URL === '/api/v1') {
+        errorMessage = 'URL da API não configurada. O backend não está acessível. Verifique se VITE_API_URL está configurado no Vercel.'
+      } else if (API_BASE_URL.startsWith('http')) {
+        errorMessage = `Não foi possível conectar ao servidor (${API_BASE_URL}). O backend pode estar offline ou a URL está incorreta. Verifique sua conexão e tente novamente.`
+      } else {
+        errorMessage = 'URL da API inválida. Configure VITE_API_URL no Vercel → Settings → Environment Variables com a URL do backend (ex: https://seu-backend.railway.app).'
+      }
+      console.error('❌ Erro de conexão:', {
+        errorMessage,
+        API_BASE_URL,
+        code: error.code,
+        message: error.message,
+        online: navigator.onLine
+      })
       return Promise.reject(new Error(errorMessage))
     }
 

@@ -45,6 +45,37 @@ export default function Register() {
     setSuccess(false)
     setLoading(true)
 
+    // Verificar conexão antes de tentar registrar
+    if (!navigator.onLine) {
+      setLoading(false)
+      showToast('Sem conexão com a internet. Verifique sua conexão e tente novamente.', 'error', 8000)
+      return
+    }
+
+    // Testar conectividade com o backend antes de tentar registrar
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+      if (API_BASE_URL.startsWith('http')) {
+        // Tentar fazer um ping no backend para verificar se está acessível
+        const baseUrl = API_BASE_URL.replace('/api/v1', '').replace(/\/$/, '') // Remove trailing slash
+        const testResponse = await fetch(`${baseUrl}/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000) // 5 segundos de timeout
+        })
+        if (!testResponse.ok) {
+          throw new Error('Backend não está respondendo corretamente')
+        }
+      }
+    } catch (testError: any) {
+      setLoading(false)
+      const errorMsg = testError.name === 'AbortError' || testError.message.includes('timeout') || testError.message.includes('Failed to fetch')
+        ? 'O servidor está demorando muito para responder ou não está acessível. Verifique sua conexão com a internet e tente novamente.'
+        : 'Não foi possível conectar ao servidor. O backend pode estar offline. Verifique sua conexão e tente novamente em alguns instantes.'
+      showToast(errorMsg, 'error', 10000)
+      console.error('❌ Erro ao testar conexão com backend:', testError)
+      return
+    }
+
     try {
       const response = await register(name, email, password)
       // Se o registro retornar requires_verification, mostrar mensagem
@@ -71,8 +102,8 @@ export default function Register() {
         errorMessage = 'Email inválido. Verifique se o email está correto.'
       } else if (backendMessage.includes('senha') && backendMessage.includes('curta') || backendMessage.includes('password') && backendMessage.includes('short')) {
         errorMessage = 'A senha deve ter pelo menos 8 caracteres.'
-      } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada')) {
-        errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.'
+      } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada') || err.code === 'ECONNABORTED' || err.code === 'ERR_NETWORK') {
+        errorMessage = 'Sem conexão com a internet ou servidor indisponível. Verifique sua conexão e tente novamente.'
       } else if (statusCode === 400) {
         if (backendMessage) {
           errorMessage = backendMessage
