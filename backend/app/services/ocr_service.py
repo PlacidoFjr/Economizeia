@@ -4,15 +4,16 @@ import pdf2image
 import io
 import logging
 from typing import Optional, Tuple
-import numpy as np
 
-# OpenCV é opcional - melhora pré-processamento
+# OpenCV e NumPy são opcionais - melhoram pré-processamento
 try:
     import cv2
+    import numpy as np
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
-    logging.warning("opencv-python não disponível - pré-processamento de imagem será limitado")
+    np = None
+    logging.warning("opencv-python/numpy não disponível - pré-processamento de imagem será limitado")
 
 # OCRmyPDF é opcional - pode ter problemas de compatibilidade
 try:
