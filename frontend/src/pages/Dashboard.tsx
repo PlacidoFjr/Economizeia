@@ -40,6 +40,13 @@ export default function Dashboard() {
   const now = new Date()
   const currentMonth = now.getMonth()
   const currentYear = now.getFullYear()
+  
+  // Formatar mês e ano atual em português
+  const monthNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ]
+  const currentMonthYear = `${monthNames[currentMonth]} ${currentYear}`
 
   // Combinar boletos e finanças para cálculos
   const allTransactions = [...(bills || []), ...(finances || [])]
@@ -164,7 +171,7 @@ export default function Dashboard() {
             <div>
               <p className="text-xs font-medium text-gray-600 mb-1">Receitas do Mês</p>
               <p className="text-xl font-bold text-green-700">R$ {incomeThisMonth.toFixed(2)}</p>
-              <p className="text-xs text-gray-500 mt-1">Novembro 2024</p>
+              <p className="text-xs text-gray-500 mt-1">{currentMonthYear}</p>
             </div>
             <div className="bg-green-100 p-2 rounded">
               <ArrowUpCircle className="w-5 h-5 text-green-600" />
@@ -177,7 +184,7 @@ export default function Dashboard() {
             <div>
               <p className="text-xs font-medium text-gray-600 mb-1">Despesas do Mês</p>
               <p className="text-xl font-bold text-red-700">R$ {expensesThisMonth.toFixed(2)}</p>
-              <p className="text-xs text-gray-500 mt-1">Novembro 2024</p>
+              <p className="text-xs text-gray-500 mt-1">{currentMonthYear}</p>
             </div>
             <div className="bg-red-100 p-2 rounded">
               <ArrowDownCircle className="w-5 h-5 text-red-600" />
