@@ -104,9 +104,9 @@ class Bill(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     issuer = Column(String(255), nullable=True)
-    amount = Column(Float, nullable=False)
+    amount = Column(Float, nullable=True)  # Nullable para permitir upload antes do OCR
     currency = Column(String(3), default="BRL")
-    due_date = Column(Date, nullable=False)
+    due_date = Column(Date, nullable=True)  # Nullable para permitir upload antes do OCR
     barcode = Column(String(255), nullable=True)
     status = Column(Enum(BillStatus), default=BillStatus.PENDING)
     type = Column(Enum(BillType), default=BillType.EXPENSE)  # expense ou income

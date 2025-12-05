@@ -38,9 +38,9 @@ CREATE TABLE IF NOT EXISTS bills (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     issuer VARCHAR(255),
-    amount DECIMAL(12,2) NOT NULL,
+    amount DECIMAL(12,2),  -- Nullable para permitir upload antes do OCR
     currency VARCHAR(3) DEFAULT 'BRL',
-    due_date DATE NOT NULL,
+    due_date DATE,  -- Nullable para permitir upload antes do OCR
     barcode VARCHAR(255),
     status VARCHAR(20) DEFAULT 'pending',
     type VARCHAR(20) DEFAULT 'expense',

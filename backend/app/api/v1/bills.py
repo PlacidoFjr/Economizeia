@@ -91,12 +91,16 @@ async def upload_bill(
             )
         
         # Create bill record (upload sempre é boleto)
+        # Campos amount e due_date serão preenchidos após OCR e extração
         bill = Bill(
             id=uuid.uuid4(),
             user_id=current_user.id,
             status=BillStatus.PENDING,
             is_bill=True,  # Upload sempre é boleto
-            confidence=0.0
+            confidence=0.0,
+            amount=None,  # Será preenchido após OCR
+            due_date=None,  # Será preenchido após OCR
+            issuer=None  # Será preenchido após OCR
         )
         db.add(bill)
         db.commit()
