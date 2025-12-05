@@ -7,10 +7,12 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 import LoadingSpinner from './components/LoadingSpinner'
 
-// Lazy load das páginas públicas (menos críticas)
-const Home = lazy(() => import('./pages/Home'))
-const Login = lazy(() => import('./pages/Login'))
-const Register = lazy(() => import('./pages/Register'))
+// Importar páginas principais diretamente (sem lazy) para evitar delay na transição
+import Home from './pages/Home'
+import Login from './pages/Login'
+import Register from './pages/Register'
+
+// Lazy load das páginas públicas menos acessadas
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
@@ -53,9 +55,9 @@ function App() {
         <AuthProvider>
           <BrowserRouter>
           <Routes>
-            <Route path="/" element={<PageSuspense><Home /></PageSuspense>} />
-            <Route path="/login" element={<PageSuspense><Login /></PageSuspense>} />
-            <Route path="/register" element={<PageSuspense><Register /></PageSuspense>} />
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<PageSuspense><ForgotPassword /></PageSuspense>} />
             <Route path="/reset-password" element={<PageSuspense><ResetPassword /></PageSuspense>} />
             <Route path="/verify-email" element={<PageSuspense><VerifyEmail /></PageSuspense>} />
