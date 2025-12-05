@@ -1,9 +1,11 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { Plus, CreditCard } from 'lucide-react'
 import { useState } from 'react'
 import { translateStatus } from '../utils/translations'
+import LoadingSpinner from '../components/LoadingSpinner'
+import EmptyState from '../components/EmptyState'
 
 interface InstallmentGroup {
   issuer: string
@@ -26,9 +28,11 @@ export default function Installments() {
     },
   })
 
-  // Agrupar boletos por emissor e identificar parcelados
-  const installmentGroups: InstallmentGroup[] = []
-  if (bills) {
+  // Agrupar boletos por emissor e identificar parcelados - memoizado
+  const installmentGroups: InstallmentGroup[] = useMemo(() => {
+    const groups: InstallmentGroup[] = []
+    if (!bills) return groups
+
     const grouped: { [key: string]: any[] } = {}
     
     bills.forEach((bill: any) => {
@@ -52,7 +56,7 @@ export default function Installments() {
             )[0]?.due_date
           : null
 
-        installmentGroups.push({
+        groups.push({
           issuer,
           total_amount: totalAmount,
           total_installments: issuerBills.length,
@@ -65,17 +69,12 @@ export default function Installments() {
         })
       }
     })
-  }
+    
+    return groups
+  }, [bills])
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-3"></div>
-          <p className="text-sm text-gray-600">Carregando parcelados...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner message="Carregando parcelados..." />
   }
 
   return (
@@ -195,22 +194,16 @@ export default function Installments() {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CreditCard className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Nenhum parcelado encontrado</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Parcelados são identificados automaticamente quando há múltiplos boletos do mesmo emissor.
-          </p>
-          <Link
-            to="/app/bills/upload"
-            className="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Fazer Upload de Boletos
-          </Link>
-        </div>
+        <EmptyState
+          icon={CreditCard}
+          title="Nenhum parcelado encontrado"
+          description="Parcelados são identificados automaticamente quando há múltiplos boletos do mesmo emissor."
+          action={{
+            label: "Fazer Upload de Boletos",
+            onClick: () => window.location.href = '/app/bills/upload',
+            icon: Plus
+          }}
+        />
       )}
     </div>
   )

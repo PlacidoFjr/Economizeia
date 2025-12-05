@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { Calendar, CheckCircle, Clock } from 'lucide-react'
 import { translateStatus, translatePaymentMethod } from '../utils/translations'
+import LoadingSpinner from '../components/LoadingSpinner'
+import EmptyState from '../components/EmptyState'
 
 export default function Payments() {
   const { data: payments, isLoading } = useQuery({
@@ -13,14 +15,7 @@ export default function Payments() {
   })
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-3"></div>
-          <p className="text-sm text-gray-600">Carregando pagamentos...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner message="Carregando pagamentos..." />
   }
 
   return (
@@ -89,13 +84,11 @@ export default function Payments() {
           ))}
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Calendar className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Nenhum pagamento encontrado</h3>
-          <p className="text-sm text-gray-600">Agende pagamentos para seus boletos</p>
-        </div>
+        <EmptyState
+          icon={Calendar}
+          title="Nenhum pagamento encontrado"
+          description="Agende pagamentos para seus boletos e tenha controle total dos seus vencimentos."
+        />
       )}
     </div>
   )

@@ -45,9 +45,10 @@ export default function Layout() {
                     <Link
                       key={item.to}
                       to={item.to}
-                      className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                      className="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      aria-label={item.label}
                     >
-                      <Icon className="w-4 h-4 mr-2" />
+                      <Icon className="w-4 h-4 mr-2" aria-hidden="true" />
                       {item.label}
                     </Link>
                   )
@@ -92,9 +93,10 @@ export default function Layout() {
                     key={item.to}
                     to={item.to}
                     onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                    className="flex items-center px-3 py-2 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 min-h-[44px]"
+                    aria-label={item.label}
                   >
-                    <Icon className="w-5 h-5 mr-3" />
+                    <Icon className="w-5 h-5 mr-3" aria-hidden="true" />
                     {item.label}
                   </Link>
                 )

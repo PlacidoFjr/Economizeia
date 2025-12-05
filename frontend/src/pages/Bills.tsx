@@ -3,7 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { Plus, FileText, Upload, Filter, X, Search, Trash2 } from 'lucide-react'
-import { translateStatus } from '../utils/translations'
+import { translateStatus, translateCategory } from '../utils/translations'
+import LoadingSpinner from '../components/LoadingSpinner'
+import EmptyState from '../components/EmptyState'
+import Breadcrumbs from '../components/Breadcrumbs'
 
 const CATEGORIES = [
   { value: '', label: 'Todas as categorias' },
@@ -90,18 +93,12 @@ export default function Bills() {
   const hasActiveFilters = Object.values(filters).some(v => v !== '')
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-3"></div>
-          <p className="text-sm text-gray-600">Carregando boletos...</p>
-        </div>
-      </div>
-    )
+    return <LoadingSpinner message="Carregando boletos..." />
   }
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
+      <Breadcrumbs items={[{ label: 'Meus Boletos' }]} />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex-1">
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Meus Boletos</h1>
@@ -285,7 +282,7 @@ export default function Bills() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 py-1 inline-flex text-xs font-medium rounded bg-gray-100 text-gray-700">
-                        {bill.category ? CATEGORIES.find(c => c.value === bill.category)?.label || bill.category : 'Sem categoria'}
+                        {bill.category ? translateCategory(bill.category) : 'Sem categoria'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -319,16 +316,18 @@ export default function Bills() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-3">
                         <Link
-                          to={`/bills/${bill.id}`}
-                          className="text-gray-700 hover:text-gray-900 hover:underline"
+                          to={`/app/bills/${bill.id}`}
+                          className="text-gray-700 hover:text-gray-900 hover:underline text-sm font-medium"
+                          aria-label={`Ver detalhes do boleto ${bill.issuer || ''}`}
                         >
                           Ver detalhes
                         </Link>
                         <button
                           onClick={() => handleDelete(bill.id, bill.issuer || 'Boleto')}
                           disabled={deletingId === bill.id}
-                          className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                          className="text-red-600 hover:text-red-800 disabled:opacity-50 p-1 rounded hover:bg-red-50 transition-colors min-w-[32px] min-h-[32px] flex items-center justify-center"
                           title="Excluir boleto"
+                          aria-label={`Excluir boleto ${bill.issuer || ''}`}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -377,7 +376,7 @@ export default function Bills() {
                 <div className="flex items-center space-x-3">
                   {bill.category && (
                     <span className="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
-                      {CATEGORIES.find(c => c.value === bill.category)?.label || bill.category}
+                      {translateCategory(bill.category)}
                     </span>
                   )}
                   <div className="flex items-center">
@@ -398,16 +397,18 @@ export default function Bills() {
                 </div>
                 <div className="flex items-center space-x-3">
                   <Link
-                    to={`/bills/${bill.id}`}
+                    to={`/app/bills/${bill.id}`}
                     className="text-sm font-medium text-gray-700 hover:text-gray-900 hover:underline"
+                    aria-label={`Ver detalhes do boleto ${bill.issuer || ''}`}
                   >
                     Ver →
                   </Link>
                   <button
                     onClick={() => handleDelete(bill.id, bill.issuer || 'Boleto')}
                     disabled={deletingId === bill.id}
-                    className="text-red-600 hover:text-red-800 disabled:opacity-50"
+                    className="text-red-600 hover:text-red-800 disabled:opacity-50 p-2 rounded hover:bg-red-50 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
                     title="Excluir"
+                    aria-label={`Excluir boleto ${bill.issuer || ''}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -418,20 +419,16 @@ export default function Bills() {
         </div>
       </>
       ) : (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-          <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-1">Nenhum boleto encontrado</h3>
-          <p className="text-sm text-gray-600 mb-4">Comece adicionando seu primeiro boleto</p>
-          <Link
-            to="/app/bills/upload"
-            className="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Fazer Upload do Primeiro Boleto
-          </Link>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="Nenhum boleto encontrado"
+          description="Comece fazendo upload do seu primeiro boleto para ter controle total dos seus pagamentos."
+          action={{
+            label: "Fazer Upload do Primeiro Boleto",
+            onClick: () => window.location.href = '/app/bills/upload',
+            icon: Upload
+          }}
+        />
       )}
     </div>
   )

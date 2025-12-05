@@ -26,7 +26,7 @@ export default function ToastContainer({ children }: ToastContainerProps) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col space-y-2">
+      <div className="fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-[100] flex flex-col space-y-2 max-w-full sm:max-w-md">
         {toasts.map((toast) => (
           <Toast key={toast.id} toast={toast} onClose={removeToast} />
         ))}

@@ -1,18 +1,20 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
 import { AlertCircle, DollarSign, FileText, ArrowUpCircle, ArrowDownCircle, TrendingUp } from 'lucide-react'
-import { translateStatus } from '../utils/translations'
+import { translateStatus, translateCategory } from '../utils/translations'
 import { 
   BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
+import LoadingSpinner from '../components/LoadingSpinner'
 
 // Cores para os gráficos (categorias e emissores)
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
 
 export default function Dashboard() {
   // Buscar boletos e finanças separadamente
-  const { data: bills } = useQuery({
+  const { data: bills, isLoading: isLoadingBills } = useQuery({
     queryKey: ['bills'],
     queryFn: async () => {
       const response = await api.get('/bills?is_bill=true')
@@ -20,7 +22,7 @@ export default function Dashboard() {
     },
   })
 
-  const { data: finances } = useQuery({
+  const { data: finances, isLoading: isLoadingFinances } = useQuery({
     queryKey: ['finances'],
     queryFn: async () => {
       const response = await api.get('/bills?is_bill=false')
@@ -28,7 +30,7 @@ export default function Dashboard() {
     },
   })
 
-  const { data: investments } = useQuery({
+  const { data: investments, isLoading: isLoadingInvestments } = useQuery({
     queryKey: ['investments'],
     queryFn: async () => {
       try {
@@ -41,174 +43,219 @@ export default function Dashboard() {
     },
   })
 
-  // Processamento de dados
-  const now = new Date()
-  const currentMonth = now.getMonth()
-  const currentYear = now.getFullYear()
-  
-  // Formatar mês e ano atual em português
-  const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ]
-  const currentMonthYear = `${monthNames[currentMonth]} ${currentYear}`
+  const isLoading = isLoadingBills || isLoadingFinances || isLoadingInvestments
 
-  // Combinar boletos e finanças para cálculos
-  const allTransactions = [...(bills || []), ...(finances || [])]
+  // Processamento de dados com useMemo para otimização
+  const { currentMonthYear, allTransactions, transactionsThisMonth, expensesThisMonth, incomeThisMonth, balanceThisMonth } = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    
+    // Formatar mês e ano atual em português
+    const monthNames = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ]
+    const currentMonthYear = `${monthNames[currentMonth]} ${currentYear}`
 
-  // Filtrar transações do mês atual
-  const transactionsThisMonth = allTransactions?.filter((b: any) => {
-    if (!b.due_date) return false
-    const dueDate = new Date(b.due_date)
-    return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear
-  }) || []
+    // Combinar boletos e finanças para cálculos
+    const allTransactions = [...(bills || []), ...(finances || [])]
 
-  // Calcular despesas do mês (todas as transações de despesa pagas/confirmadas)
-  const expensesThisMonth = transactionsThisMonth
-    .filter((b: any) => b.type === 'expense' && (b.status === 'paid' || b.status === 'confirmed'))
-    .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
-
-  // Calcular receitas (todas as transações de receita pagas/confirmadas)
-  const incomeThisMonth = transactionsThisMonth
-    .filter((b: any) => b.type === 'income' && (b.status === 'paid' || b.status === 'confirmed'))
-    .reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0
-
-  // Saldo do mês
-  const balanceThisMonth = incomeThisMonth - expensesThisMonth
-
-  // Agrupar por categoria (usando todas as transações)
-  const categoryData = transactionsThisMonth.reduce((acc: any, bill: any) => {
-    if (bill.type === 'expense') { // Apenas despesas
-      const category = bill.category || 'Outras'
-      if (!acc[category]) {
-        acc[category] = { name: category, value: 0, count: 0 }
-      }
-      acc[category].value += bill.amount || 0
-      acc[category].count += 1
-    }
-    return acc
-  }, {})
-
-  const categoryChartData = Object.values(categoryData).map((cat: any, index: number) => ({
-    name: cat.name,
-    value: cat.value,
-    count: cat.count,
-    color: COLORS[index % COLORS.length]
-  })).sort((a: any, b: any) => b.value - a.value)
-
-  // Agrupar por emissor (top 10) - usando todas as transações
-  const issuerData = transactionsThisMonth.reduce((acc: any, bill: any) => {
-    if (bill.type === 'expense') { // Apenas despesas
-      const issuer = bill.issuer || 'Desconhecido'
-      if (!acc[issuer]) {
-        acc[issuer] = { name: issuer, value: 0, count: 0 }
-      }
-      acc[issuer].value += bill.amount || 0
-      acc[issuer].count += 1
-    }
-    return acc
-  }, {})
-
-  const issuerChartData = Object.values(issuerData)
-    .map((iss: any, index: number) => ({
-      name: iss.name.length > 15 ? iss.name.substring(0, 15) + '...' : iss.name,
-      fullName: iss.name,
-      value: iss.value,
-      count: iss.count,
-      color: COLORS[index % COLORS.length]
-    }))
-    .sort((a: any, b: any) => b.value - a.value)
-    .slice(0, 10)
-
-  // Dados mensais (últimos 6 meses) - usando todas as transações
-  const monthlyData = []
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(currentYear, currentMonth - i, 1)
-    const monthTransactions = allTransactions?.filter((b: any) => {
+    // Filtrar transações do mês atual
+    const transactionsThisMonth = allTransactions?.filter((b: any) => {
       if (!b.due_date) return false
       const dueDate = new Date(b.due_date)
-      return dueDate.getMonth() === date.getMonth() && dueDate.getFullYear() === date.getFullYear()
+      return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear
     }) || []
 
-    const expenses = monthTransactions
+    // Calcular despesas do mês (todas as transações de despesa pagas/confirmadas)
+    const expensesThisMonth = transactionsThisMonth
       .filter((b: any) => b.type === 'expense' && (b.status === 'paid' || b.status === 'confirmed'))
       .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
 
-    const income = monthTransactions
+    // Calcular receitas (todas as transações de receita pagas/confirmadas)
+    const incomeThisMonth = transactionsThisMonth
       .filter((b: any) => b.type === 'income' && (b.status === 'paid' || b.status === 'confirmed'))
-      .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
+      .reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0
 
-    monthlyData.push({
-      name: date.toLocaleDateString('pt-BR', { month: 'short' }),
-      month: date.getMonth(),
-      year: date.getFullYear(),
-      despesas: expenses,
-      receitas: income,
-      saldo: income - expenses,
-    })
-  }
+    // Saldo do mês
+    const balanceThisMonth = incomeThisMonth - expensesThisMonth
 
-  // Processar dados de investimentos
-  const totalInvested = investments?.reduce((sum: number, inv: any) => sum + (inv.amount_invested || 0), 0) || 0
-  const totalCurrentValue = investments?.reduce((sum: number, inv: any) => sum + ((inv.current_value || inv.amount_invested) || 0), 0) || 0
-  const totalProfitLoss = totalCurrentValue - totalInvested
-  const totalProfitLossPercent = totalInvested > 0 ? ((totalProfitLoss / totalInvested) * 100) : 0
-
-  // Agrupar investimentos por tipo
-  const typeLabels: { [key: string]: string } = {
-    stock: 'Ações',
-    fixed_income: 'Renda Fixa',
-    fund: 'Fundos',
-    crypto: 'Criptomoedas',
-    real_estate: 'Imóveis',
-    other: 'Outros'
-  }
-  
-  const investmentTypeData = (investments || []).reduce((acc: any, inv: any) => {
-    const type = inv.type || 'other'
-    const typeLabel = typeLabels[type] || 'Outros'
-    
-    if (!acc[type]) {
-      acc[type] = { name: typeLabel, value: 0, count: 0, invested: 0, current: 0 }
+    return {
+      currentMonthYear,
+      allTransactions,
+      transactionsThisMonth,
+      expensesThisMonth,
+      incomeThisMonth,
+      balanceThisMonth
     }
-    acc[type].value += inv.current_value || inv.amount_invested || 0
-    acc[type].invested += inv.amount_invested || 0
-    acc[type].current += inv.current_value || inv.amount_invested || 0
-    acc[type].count += 1
-    return acc
-  }, {})
+  }, [bills, finances])
 
-  const investmentTypeChartData = Object.values(investmentTypeData)
-    .map((inv: any, index: number) => ({
-      ...inv,
-      color: COLORS[index % COLORS.length],
-      profit: inv.current - inv.invested,
-      profitPercent: inv.invested > 0 ? ((inv.current - inv.invested) / inv.invested * 100) : 0
-    }))
-    .sort((a: any, b: any) => b.value - a.value)
+  // Agrupar por categoria (usando todas as transações) - memoizado
+  const categoryChartData = useMemo(() => {
+    const categoryData = transactionsThisMonth.reduce((acc: any, bill: any) => {
+      if (bill.type === 'expense') { // Apenas despesas
+        const category = bill.category || 'Outras'
+        if (!acc[category]) {
+          acc[category] = { name: category, value: 0, count: 0 }
+        }
+        acc[category].value += bill.amount || 0
+        acc[category].count += 1
+      }
+      return acc
+    }, {})
 
-  // Dados para gráfico de receitas vs despesas
-  const incomeVsExpenses = [
+    return Object.values(categoryData).map((cat: any, index: number) => ({
+      name: translateCategory(cat.name),
+      value: cat.value,
+      count: cat.count,
+      color: COLORS[index % COLORS.length]
+    })).sort((a: any, b: any) => b.value - a.value)
+  }, [transactionsThisMonth])
+
+  // Agrupar por emissor (top 10) - memoizado
+  const issuerChartData = useMemo(() => {
+    const issuerData = transactionsThisMonth.reduce((acc: any, bill: any) => {
+      if (bill.type === 'expense') { // Apenas despesas
+        const issuer = bill.issuer || 'Desconhecido'
+        if (!acc[issuer]) {
+          acc[issuer] = { name: issuer, value: 0, count: 0 }
+        }
+        acc[issuer].value += bill.amount || 0
+        acc[issuer].count += 1
+      }
+      return acc
+    }, {})
+
+    return Object.values(issuerData)
+      .map((iss: any, index: number) => ({
+        name: iss.name.length > 15 ? iss.name.substring(0, 15) + '...' : iss.name,
+        fullName: iss.name,
+        value: iss.value,
+        count: iss.count,
+        color: COLORS[index % COLORS.length]
+      }))
+      .sort((a: any, b: any) => b.value - a.value)
+      .slice(0, 10)
+  }, [transactionsThisMonth])
+
+  // Dados mensais (últimos 6 meses) - memoizado
+  const monthlyData = useMemo(() => {
+    const now = new Date()
+    const currentMonth = now.getMonth()
+    const currentYear = now.getFullYear()
+    const data = []
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(currentYear, currentMonth - i, 1)
+      const monthTransactions = allTransactions?.filter((b: any) => {
+        if (!b.due_date) return false
+        const dueDate = new Date(b.due_date)
+        return dueDate.getMonth() === date.getMonth() && dueDate.getFullYear() === date.getFullYear()
+      }) || []
+
+      const expenses = monthTransactions
+        .filter((b: any) => b.type === 'expense' && (b.status === 'paid' || b.status === 'confirmed'))
+        .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
+
+      const income = monthTransactions
+        .filter((b: any) => b.type === 'income' && (b.status === 'paid' || b.status === 'confirmed'))
+        .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
+
+      data.push({
+        name: date.toLocaleDateString('pt-BR', { month: 'short' }),
+        month: date.getMonth(),
+        year: date.getFullYear(),
+        despesas: expenses,
+        receitas: income,
+        saldo: income - expenses,
+      })
+    }
+    return data
+  }, [allTransactions])
+
+  // Processar dados de investimentos - memoizado
+  const { totalInvested, totalCurrentValue, totalProfitLoss, totalProfitLossPercent, investmentTypeChartData } = useMemo(() => {
+    const totalInvested = investments?.reduce((sum: number, inv: any) => sum + (inv.amount_invested || 0), 0) || 0
+    const totalCurrentValue = investments?.reduce((sum: number, inv: any) => sum + ((inv.current_value || inv.amount_invested) || 0), 0) || 0
+    const totalProfitLoss = totalCurrentValue - totalInvested
+    const totalProfitLossPercent = totalInvested > 0 ? ((totalProfitLoss / totalInvested) * 100) : 0
+
+    // Agrupar investimentos por tipo
+    const typeLabels: { [key: string]: string } = {
+      stock: 'Ações',
+      fixed_income: 'Renda Fixa',
+      fund: 'Fundos',
+      crypto: 'Criptomoedas',
+      real_estate: 'Imóveis',
+      other: 'Outros'
+    }
+    
+    const investmentTypeData = (investments || []).reduce((acc: any, inv: any) => {
+      const type = inv.type || 'other'
+      const typeLabel = typeLabels[type] || 'Outros'
+      
+      if (!acc[type]) {
+        acc[type] = { name: typeLabel, value: 0, count: 0, invested: 0, current: 0 }
+      }
+      acc[type].value += inv.current_value || inv.amount_invested || 0
+      acc[type].invested += inv.amount_invested || 0
+      acc[type].current += inv.current_value || inv.amount_invested || 0
+      acc[type].count += 1
+      return acc
+    }, {})
+
+    const investmentTypeChartData = Object.values(investmentTypeData)
+      .map((inv: any, index: number) => ({
+        ...inv,
+        color: COLORS[index % COLORS.length],
+        profit: inv.current - inv.invested,
+        profitPercent: inv.invested > 0 ? ((inv.current - inv.invested) / inv.invested * 100) : 0
+      }))
+      .sort((a: any, b: any) => b.value - a.value)
+
+    return {
+      totalInvested,
+      totalCurrentValue,
+      totalProfitLoss,
+      totalProfitLossPercent,
+      investmentTypeChartData
+    }
+  }, [investments])
+
+  // Dados para gráfico de receitas vs despesas - memoizado
+  const incomeVsExpenses = useMemo(() => [
     { name: 'Receitas', valor: incomeThisMonth, color: '#10b981' }, // Verde para receitas
     { name: 'Despesas', valor: expensesThisMonth, color: '#ef4444' }, // Vermelho para despesas
-  ]
+  ], [incomeThisMonth, expensesThisMonth])
 
-  const pendingBills = allTransactions?.filter((b: any) => 
-    (b.status === 'pending' || b.status === 'confirmed') && 
-    b.type === 'expense' && 
-    b.is_bill === true
-  ) || []
-  const overdueBills = allTransactions?.filter((b: any) => {
-    if (!b.due_date) return false
-    const dueDate = new Date(b.due_date)
-    // Apenas despesas/boletos vencidos (não receitas)
-    return dueDate < new Date() && 
-           b.status !== 'paid' && 
-           b.type === 'expense' && 
-           b.is_bill === true
-  }) || []
-  const totalPending = pendingBills.reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
+  // Filtrar boletos pendentes e vencidos - memoizado
+  const { pendingBills, overdueBills, totalPending } = useMemo(() => {
+    const pendingBills = allTransactions?.filter((b: any) => 
+      (b.status === 'pending' || b.status === 'confirmed') && 
+      b.type === 'expense' && 
+      b.is_bill === true
+    ) || []
+    
+    const overdueBills = allTransactions?.filter((b: any) => {
+      if (!b.due_date) return false
+      const dueDate = new Date(b.due_date)
+      // Apenas despesas/boletos vencidos (não receitas)
+      return dueDate < new Date() && 
+             b.status !== 'paid' && 
+             b.type === 'expense' && 
+             b.is_bill === true
+    }) || []
+    
+    const totalPending = pendingBills.reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
+    
+    return { pendingBills, overdueBills, totalPending }
+  }, [allTransactions])
   // const scheduledPayments = payments?.filter((p: any) => p.status === 'scheduled').length || 0
+
+  if (isLoading) {
+    return <LoadingSpinner message="Carregando dados do painel..." />
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 pb-20 sm:pb-6">

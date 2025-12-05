@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { DollarSign, Calendar, Tag, FileText, Save, X, TrendingUp, TrendingDown } from 'lucide-react'
+import { useToast } from '../hooks/useToast'
+import Breadcrumbs from '../components/Breadcrumbs'
+import Button from '../components/Button'
 
 const CATEGORIES = [
   { value: 'alimentacao', label: 'Alimentação' },
@@ -23,6 +26,7 @@ const STATUS_OPTIONS = [
 export default function AddExpense() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
   
   const [formData, setFormData] = useState({
     type: 'expense', // 'expense' ou 'income'
@@ -36,6 +40,7 @@ export default function AddExpense() {
   })
   
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [touched, setTouched] = useState<Record<string, boolean>>({})
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -52,6 +57,10 @@ export default function AddExpense() {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['finances'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      showToast(
+        `${formData.type === 'income' ? 'Receita' : 'Despesa'} criada com sucesso!`,
+        'success'
+      )
       // Navegar para a página apropriada baseado no tipo
       const targetPath = formData.type === 'income' ? '/app/finances' : '/app/bills'
       console.log('Navegando para:', targetPath)
@@ -61,26 +70,81 @@ export default function AddExpense() {
       console.error('❌ Erro na mutation:', error)
       const errorMessage = error.response?.data?.detail || error.message || 'Erro ao criar despesa/receita'
       setErrors({ submit: errorMessage })
+      showToast(errorMessage, 'error', 8000)
     },
   })
 
+  const validateField = (name: string, value: string): string => {
+    switch (name) {
+      case 'amount':
+        if (!value) return 'Valor é obrigatório'
+        const numValue = parseFloat(value)
+        if (isNaN(numValue) || numValue <= 0) return 'Valor deve ser maior que zero'
+        if (numValue > 1000000000) return 'Valor muito alto'
+        return ''
+      case 'due_date':
+        if (!value) return 'Data de vencimento é obrigatória'
+        const date = new Date(value)
+        if (isNaN(date.getTime())) return 'Data inválida'
+        return ''
+      case 'issuer':
+        if (value && value.length > 255) return 'Emissor muito longo (máximo 255 caracteres)'
+        return ''
+      default:
+        return ''
+    }
+  }
+
+  const handleBlur = (name: string) => {
+    setTouched({ ...touched, [name]: true })
+    const error = validateField(name, formData[name as keyof typeof formData])
+    if (error) {
+      setErrors({ ...errors, [name]: error })
+    } else {
+      const newErrors = { ...errors }
+      delete newErrors[name]
+      setErrors(newErrors)
+    }
+  }
+
+  const handleChange = (name: string, value: string) => {
+    setFormData({ ...formData, [name]: value })
+    // Validar em tempo real se o campo já foi tocado
+    if (touched[name]) {
+      const error = validateField(name, value)
+      if (error) {
+        setErrors({ ...errors, [name]: error })
+      } else {
+        const newErrors = { ...errors }
+        delete newErrors[name]
+        setErrors(newErrors)
+      }
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setErrors({})
+    
+    // Marcar todos os campos como tocados
+    const allTouched: Record<string, boolean> = {}
+    Object.keys(formData).forEach(key => {
+      allTouched[key] = true
+    })
+    setTouched(allTouched)
 
     // Validações
     const newErrors: Record<string, string> = {}
     
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Valor deve ser maior que zero'
-    }
-    
-    if (!formData.due_date) {
-      newErrors.due_date = 'Data de vencimento é obrigatória'
-    }
+    Object.keys(formData).forEach(key => {
+      if (key === 'amount' || key === 'due_date') {
+        const error = validateField(key, formData[key as keyof typeof formData])
+        if (error) newErrors[key] = error
+      }
+    })
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors)
+      showToast('Por favor, corrija os erros no formulário', 'error')
       return
     }
 
@@ -107,6 +171,12 @@ export default function AddExpense() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6">
+      <Breadcrumbs 
+        items={[
+          { label: formData.type === 'income' ? 'Finanças' : 'Boletos', to: formData.type === 'income' ? '/app/finances' : '/app/bills' },
+          { label: formData.type === 'income' ? 'Adicionar Receita' : 'Adicionar Despesa' }
+        ]} 
+      />
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
           {formData.type === 'income' ? 'Adicionar Receita' : 'Adicionar Despesa'}
@@ -165,12 +235,19 @@ export default function AddExpense() {
             type="text"
             id="issuer"
             value={formData.issuer}
-            onChange={(e) => setFormData({ ...formData, issuer: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+            onChange={(e) => handleChange('issuer', e.target.value)}
+            onBlur={() => handleBlur('issuer')}
+            className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 ${
+              errors.issuer ? 'border-red-300' : 'border-gray-300'
+            }`}
             placeholder={formData.type === 'income' 
               ? 'Ex: Salário, Freelance, Vendas, etc.' 
               : 'Ex: Energia Elétrica, Supermercado, etc.'}
+            maxLength={255}
           />
+          {errors.issuer && (
+            <p className="mt-1 text-sm text-red-600">{errors.issuer}</p>
+          )}
         </div>
 
         {/* Valor */}
@@ -185,15 +262,18 @@ export default function AddExpense() {
             step="0.01"
             min="0.01"
             value={formData.amount}
-            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+            onChange={(e) => handleChange('amount', e.target.value)}
+            onBlur={() => handleBlur('amount')}
             className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 ${
-              errors.amount ? 'border-red-300' : 'border-gray-300'
+              errors.amount ? 'border-red-300 bg-red-50' : 'border-gray-300'
             }`}
             placeholder="0.00"
             required
+            aria-invalid={!!errors.amount}
+            aria-describedby={errors.amount ? 'amount-error' : undefined}
           />
           {errors.amount && (
-            <p className="mt-1 text-sm text-red-600">{errors.amount}</p>
+            <p id="amount-error" className="mt-1 text-sm text-red-600" role="alert">{errors.amount}</p>
           )}
         </div>
 
@@ -207,14 +287,17 @@ export default function AddExpense() {
             type="date"
             id="due_date"
             value={formData.due_date || defaultDateStr}
-            onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+            onChange={(e) => handleChange('due_date', e.target.value)}
+            onBlur={() => handleBlur('due_date')}
             className={`w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 ${
-              errors.due_date ? 'border-red-300' : 'border-gray-300'
+              errors.due_date ? 'border-red-300 bg-red-50' : 'border-gray-300'
             }`}
             required
+            aria-invalid={!!errors.due_date}
+            aria-describedby={errors.due_date ? 'due_date-error' : undefined}
           />
           {errors.due_date && (
-            <p className="mt-1 text-sm text-red-600">{errors.due_date}</p>
+            <p id="due_date-error" className="mt-1 text-sm text-red-600" role="alert">{errors.due_date}</p>
           )}
         </div>
 
@@ -292,31 +375,24 @@ export default function AddExpense() {
 
         {/* Botões */}
         <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 pt-4 border-t border-gray-200">
-          <button
+          <Button
             type="button"
-            onClick={() => navigate('/app/bills')}
-            className="w-full sm:w-auto px-6 py-2.5 sm:py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-semibold transition-colors flex items-center justify-center"
+            variant="outline"
+            onClick={() => navigate(formData.type === 'income' ? '/app/finances' : '/app/bills')}
+            icon={X}
+            className="w-full sm:w-auto"
           >
-            <X className="w-4 h-4 mr-2" />
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            disabled={createMutation.isPending}
-            className="w-full sm:w-auto px-6 py-2.5 sm:py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+            variant="primary"
+            isLoading={createMutation.isPending}
+            icon={Save}
+            className="w-full sm:w-auto"
           >
-            {createMutation.isPending ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Salvando...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4 mr-2" />
-                {formData.type === 'income' ? 'Salvar Receita' : 'Salvar Despesa'}
-              </>
-            )}
-          </button>
+            {formData.type === 'income' ? 'Salvar Receita' : 'Salvar Despesa'}
+          </Button>
         </div>
       </form>
     </div>

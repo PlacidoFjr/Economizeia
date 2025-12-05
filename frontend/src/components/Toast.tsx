@@ -51,15 +51,15 @@ export default function Toast({ toast, onClose }: ToastProps) {
 
   return (
     <div
-      className={`flex items-start space-x-3 p-4 rounded-lg border shadow-lg min-w-[300px] max-w-[500px] animate-slide-in ${colors[toast.type]}`}
+      className={`flex items-start space-x-2 sm:space-x-3 p-3 sm:p-4 rounded-lg border shadow-lg w-[calc(100vw-2rem)] sm:min-w-[300px] sm:max-w-[500px] animate-slide-in ${colors[toast.type]}`}
     >
-      <Icon className={`w-5 h-5 flex-shrink-0 mt-0.5 ${iconColors[toast.type]}`} />
-      <div className="flex-1">
-        <p className="text-sm font-medium">{toast.message}</p>
+      <Icon className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 ${iconColors[toast.type]}`} />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs sm:text-sm font-medium break-words">{toast.message}</p>
       </div>
       <button
         onClick={() => onClose(toast.id)}
-        className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+        className="flex-shrink-0 text-gray-400 hover:text-gray-600 transition-colors p-1 -mr-1"
         aria-label="Fechar"
       >
         <X className="w-4 h-4" />
