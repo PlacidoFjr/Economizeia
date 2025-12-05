@@ -11,6 +11,7 @@ Como usar:
 
 import os
 from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text
 
 def reset_users():
     """Apaga todos os usuários e dados relacionados."""
@@ -46,6 +47,15 @@ def reset_users():
             conn.execute(text("DELETE FROM notifications"))
             conn.commit()
             print("✅ Notificações apagadas")
+            
+            # Novas tabelas
+            conn.execute(text("DELETE FROM savings_goals"))
+            conn.commit()
+            print("✅ Metas de economia apagadas")
+            
+            conn.execute(text("DELETE FROM investments"))
+            conn.commit()
+            print("✅ Investimentos apagados")
             
             conn.execute(text("DELETE FROM payments"))
             conn.commit()

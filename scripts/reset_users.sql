@@ -4,6 +4,8 @@
 -- 1. Apagar dados relacionados primeiro (devido a foreign keys)
 DELETE FROM audit_logs;
 DELETE FROM notifications;
+DELETE FROM savings_goals;
+DELETE FROM investments;
 DELETE FROM payments;
 DELETE FROM bills;
 
