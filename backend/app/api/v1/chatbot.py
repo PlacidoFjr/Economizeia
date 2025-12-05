@@ -67,7 +67,7 @@ async def chat_with_assistant(
         pending_type = None
         pending_issuer = None
         
-        # Procurar no histórico por menções de valores e tipos
+        # Procurar no histórico por menções de valores, tipos, categorias e emissores
         for msg in reversed(conversation_history[-5:]):  # Últimas 5 mensagens
             msg_text = (msg.get('text') or msg.get('message') or '').lower()
             # Procurar por valores (R$ X,XX ou X reais)
@@ -78,11 +78,11 @@ async def chat_with_assistant(
                 try:
                     pending_amount = float(amount_str)
                     # Verificar se menciona receita
-                    if any(kw in msg_text for kw in ['receita', 'ganho', 'entrada', 'salário']):
+                    if any(kw in msg_text for kw in ['receita', 'ganho', 'entrada', 'salário', 'ganhei', 'recebi']):
                         pending_type = BillType.INCOME
                         has_pending_transaction = True
                     # Verificar se menciona despesa
-                    elif any(kw in msg_text for kw in ['despesa', 'gasto', 'pago', 'paguei']):
+                    elif any(kw in msg_text for kw in ['despesa', 'gasto', 'pago', 'paguei', 'gastei']):
                         pending_type = BillType.EXPENSE
                         has_pending_transaction = True
                     # Se não especificar, verificar contexto atual
@@ -94,6 +94,34 @@ async def chat_with_assistant(
                         has_pending_transaction = True
                 except:
                     pass
+            
+            # Procurar por categoria no histórico (palavras-chave de categorias)
+            if not pending_issuer:  # Só procurar se ainda não tiver emissor
+                category_keywords = {
+                    'alimentacao': ['comida', 'restaurante', 'supermercado', 'mercado', 'padaria', 'lanche', 'delivery', 'ifood', 'alimentação'],
+                    'moradia': ['aluguel', 'condomínio', 'água', 'luz', 'energia', 'gás', 'internet', 'telefone', 'iptu'],
+                    'transporte': ['gasolina', 'combustível', 'uber', 'táxi', 'ônibus', 'metrô', 'estacionamento', 'pedágio'],
+                    'saude': ['médico', 'remédio', 'farmácia', 'hospital', 'plano de saúde', 'dentista'],
+                    'vestuario': ['roupas', 'vestuário', 'calçado', 'sapatos', 'tênis', 'camisa', 'calça', 'blusa'],
+                    'compras': ['compras', 'shopping', 'loja', 'adquirir'],
+                    'lazer': ['cinema', 'show', 'festa', 'diversão', 'jogos'],
+                    'educacao': ['escola', 'curso', 'faculdade', 'universidade', 'livro']
+                }
+                # Se encontrar palavra-chave de categoria, pode ser o emissor também
+                for cat, keywords in category_keywords.items():
+                    if any(kw in msg_text for kw in keywords):
+                        # Se a mensagem parece ser um nome de estabelecimento, usar como emissor
+                        if len(msg_text.split()) <= 3:  # Nomes curtos provavelmente são emissores
+                            pending_issuer = msg_text.title()
+                        break
+            
+            # Procurar por emissor (nomes próprios, estabelecimentos)
+            if not pending_issuer and len(msg_text.split()) <= 5:
+                # Se a mensagem parece ser uma resposta direta (não é pergunta), pode ser emissor
+                if not any(q in msg_text for q in ['?', 'qual', 'onde', 'como', 'quando', 'quanto']):
+                    # Verificar se tem palavras que indicam estabelecimento
+                    if any(word in msg_text for word in ['supermercado', 'loja', 'mercado', 'farmácia', 'restaurante', 'energia', 'água', 'luz']):
+                        pending_issuer = msg_text.title()
         
         # Se não detectar explicitamente, assumir despesa (comportamento padrão)
         transaction_type = BillType.INCOME if is_income and not is_expense else BillType.EXPENSE
