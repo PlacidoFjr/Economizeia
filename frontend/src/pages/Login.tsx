@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../hooks/useToast'
 import { Shield, TrendingUp, Zap, Mail, Lock, ArrowLeft } from 'lucide-react'
@@ -33,6 +34,7 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
+  const queryClient = useQueryClient()
   const { showToast } = useToast()
   const navigate = useNavigate()
 
@@ -49,6 +51,8 @@ export default function Login() {
 
     try {
       await login(email, password)
+      // Limpar cache para garantir que os dados do novo usuário sejam buscados
+      queryClient.clear()
       showToast('Login realizado com sucesso!', 'success')
       navigate('/app/dashboard')
     } catch (err: any) {

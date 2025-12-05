@@ -20,7 +20,8 @@ export default function Dashboard() {
       const response = await api.get('/auth/me')
       return response.data
     },
-    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+    staleTime: 0, // Sempre buscar dados atualizados (sem cache)
+    gcTime: 0, // Não manter cache após desmontar
   })
 
   // Buscar boletos e finanças separadamente

@@ -1,15 +1,19 @@
 import { useState } from 'react'
 import { Outlet, Link, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
 import { Home, FileText, Upload, LogOut, Calendar, CreditCard, Menu, X, DollarSign, Target, TrendingUp } from 'lucide-react'
 import Chatbot from './Chatbot'
 
 export default function Layout() {
   const { logout } = useAuth()
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleLogout = () => {
+    // Limpar todos os caches do React Query antes de fazer logout
+    queryClient.clear()
     logout()
     navigate('/login')
   }
