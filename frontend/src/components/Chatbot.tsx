@@ -210,7 +210,7 @@ export default function Chatbot() {
                 <p className="text-xs text-gray-400">Online</p>
               </div>
             </div>
-            <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0 ml-2">
+            <div className="flex items-center space-x-2 sm:space-x-2 flex-shrink-0 ml-2">
               <button
                 onClick={() => {
                   if (confirm('Deseja limpar o histórico da conversa?')) {
@@ -218,18 +218,18 @@ export default function Chatbot() {
                     setMessages(INITIAL_MESSAGES)
                   }
                 }}
-                className="hover:bg-gray-800 p-1.5 sm:p-1.5 rounded transition-colors touch-manipulation"
+                className="hover:bg-gray-800 active:bg-gray-700 p-2 sm:p-1.5 rounded transition-colors touch-manipulation min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                 aria-label="Limpar conversa"
                 title="Limpar conversa"
               >
-                <Trash2 className="w-4 h-4 sm:w-4 sm:h-4" />
+                <Trash2 className="w-5 h-5 sm:w-4 sm:h-4 text-white" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
-                className="hover:bg-gray-800 p-1.5 sm:p-1.5 rounded transition-colors touch-manipulation"
+                className="hover:bg-gray-800 active:bg-gray-700 p-2 sm:p-1.5 rounded transition-colors touch-manipulation min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                 aria-label="Fechar chatbot"
               >
-                <X className="w-4 h-4 sm:w-4 sm:h-4" />
+                <X className="w-5 h-5 sm:w-4 sm:h-4 text-white" />
               </button>
             </div>
           </div>

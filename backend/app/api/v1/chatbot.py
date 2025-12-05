@@ -272,7 +272,12 @@ async def chat_with_assistant(
                     try:
                         # Tentar parsear a data
                         if isinstance(expense_data["due_date"], str):
-                            due_date = datetime.fromisoformat(expense_data["due_date"]).date()
+                            parsed_date = datetime.fromisoformat(expense_data["due_date"]).date()
+                            # Se a data for no passado, usar hoje como base
+                            if parsed_date < date.today():
+                                due_date = date.today()
+                            else:
+                                due_date = parsed_date
                         else:
                             due_date = date.today()
                     except:
@@ -338,22 +343,31 @@ async def chat_with_assistant(
                 
                 # Se for parcelamento, criar múltiplas transações
                 if final_is_installment and final_installment_total and final_installment_total > 1:
-                    # Calcular valor de cada parcela
-                    installment_amount = final_amount / final_installment_total
+                    # Calcular valor de cada parcela (arredondar para 2 casas decimais)
+                    installment_amount = round(final_amount / final_installment_total, 2)
+                    
+                    # Ajustar última parcela para compensar arredondamentos
+                    total_installments = installment_amount * (final_installment_total - 1)
+                    last_installment_amount = round(final_amount - total_installments, 2)
                     
                     # Criar todas as parcelas
                     created_bills = []
                     for i in range(1, final_installment_total + 1):
                         # Calcular data de vencimento (primeira parcela na data informada, demais a cada mês)
-                        installment_due_date = due_date
-                        if i > 1:
-                            installment_due_date = due_date + relativedelta(months=i-1)
+                        if i == 1:
+                            installment_due_date = due_date
+                        else:
+                            # Adicionar (i-1) meses à data inicial
+                            installment_due_date = due_date + relativedelta(months=(i-1))
+                        
+                        # Usar valor ajustado na última parcela
+                        current_amount = last_installment_amount if i == final_installment_total else installment_amount
                         
                         bill = Bill(
                             id=uuid.uuid4(),
                             user_id=current_user.id,
                             issuer=default_issuer,
-                            amount=round(installment_amount, 2),
+                            amount=current_amount,
                             currency="BRL",
                             due_date=installment_due_date,
                             status=BillStatus.CONFIRMED,

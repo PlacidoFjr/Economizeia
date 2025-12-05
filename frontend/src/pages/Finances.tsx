@@ -44,6 +44,7 @@ export default function Finances() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['finances'] })
+      queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
