@@ -198,19 +198,19 @@ export default function Chatbot() {
 
       {/* Janela do Chatbot */}
       {isOpen && (
-        <div className="fixed bottom-0 right-0 sm:bottom-6 sm:right-6 w-full sm:w-96 h-[calc(100vh-4rem)] sm:h-[600px] bg-white rounded-t-lg sm:rounded-lg shadow-xl border border-gray-200 flex flex-col z-50">
+        <div className="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:w-96 sm:h-[600px] bg-white rounded-none sm:rounded-lg shadow-xl border-0 sm:border border-gray-200 flex flex-col z-50 safe-area-inset chatbot-container">
           {/* Header */}
-          <div className="bg-gray-900 text-white p-4 rounded-t-lg flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="bg-gray-800 p-2 rounded mr-3">
-                <Bot className="w-4 h-4" />
+          <div className="bg-gray-900 text-white p-3 sm:p-4 flex items-center justify-between safe-area-top">
+            <div className="flex items-center flex-1 min-w-0">
+              <div className="bg-gray-800 p-1.5 sm:p-2 rounded mr-2 sm:mr-3 flex-shrink-0">
+                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <div>
-                <h3 className="font-semibold text-sm">Assistente EconomizeIA</h3>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-xs sm:text-sm truncate">Assistente EconomizeIA</h3>
                 <p className="text-xs text-gray-400">Online</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0 ml-2">
               <button
                 onClick={() => {
                   if (confirm('Deseja limpar o histórico da conversa?')) {
@@ -218,56 +218,56 @@ export default function Chatbot() {
                     setMessages(INITIAL_MESSAGES)
                   }
                 }}
-                className="hover:bg-gray-800 p-1.5 rounded transition-colors"
+                className="hover:bg-gray-800 p-1.5 sm:p-1.5 rounded transition-colors touch-manipulation"
                 aria-label="Limpar conversa"
                 title="Limpar conversa"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-4 h-4 sm:w-4 sm:h-4" />
               </button>
               <button
                 onClick={() => setIsOpen(false)}
-                className="hover:bg-gray-800 p-1.5 rounded transition-colors"
+                className="hover:bg-gray-800 p-1.5 sm:p-1.5 rounded transition-colors touch-manipulation"
                 aria-label="Fechar chatbot"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>
 
           {/* Mensagens */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 overscroll-contain">
             {messages.map((message) => (
               <div
                 key={message.id}
                 className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`flex items-start space-x-2 max-w-[80%] ${
+                  className={`flex items-start space-x-2 sm:space-x-2 max-w-[85%] sm:max-w-[80%] ${
                     message.sender === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                   }`}
                 >
                   <div
-                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
+                    className={`flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center ${
                       message.sender === 'user'
                         ? 'bg-gray-900'
                         : 'bg-gray-200'
                     }`}
                   >
                     {message.sender === 'user' ? (
-                      <User className="w-4 h-4 text-white" />
+                      <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                     ) : (
-                      <Bot className="w-4 h-4 text-gray-700" />
+                      <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-700" />
                     )}
                   </div>
                   <div
-                    className={`rounded-lg px-3 py-2 ${
+                    className={`rounded-lg px-2.5 py-1.5 sm:px-3 sm:py-2 ${
                       message.sender === 'user'
                         ? 'bg-gray-900 text-white'
                         : 'bg-white text-gray-900 border border-gray-200'
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{message.text}</p>
-                    <p className="text-xs mt-1 opacity-70">
+                    <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{message.text}</p>
+                    <p className="text-[10px] sm:text-xs mt-1 opacity-70">
                       {message.timestamp.toLocaleTimeString('pt-BR', {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -281,15 +281,15 @@ export default function Chatbot() {
             {isLoading && (
               <div className="flex justify-start">
                 <div className="flex items-start space-x-2">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                    <Bot className="w-5 h-5 text-gray-700 animate-pulse" />
+                  <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                    <Bot className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-700 animate-pulse" />
                   </div>
-                  <div className="bg-white rounded-2xl px-4 py-3 border border-gray-200">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <span className="text-xs text-gray-500 ml-2">Pensando...</span>
+                  <div className="bg-white rounded-lg sm:rounded-2xl px-3 py-2 sm:px-4 sm:py-3 border border-gray-200">
+                    <div className="flex items-center space-x-1.5 sm:space-x-2">
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 sm:ml-2">Pensando...</span>
                     </div>
                   </div>
                 </div>
@@ -301,14 +301,14 @@ export default function Chatbot() {
 
           {/* Perguntas rápidas */}
           {messages.length === INITIAL_MESSAGES.length && (
-            <div className="px-4 py-2 bg-white border-t border-gray-200">
-              <p className="text-xs font-medium text-gray-600 mb-2">Perguntas rápidas:</p>
-              <div className="flex flex-wrap gap-2">
+            <div className="px-3 sm:px-4 py-2 bg-white border-t border-gray-200">
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-1.5 sm:mb-2">Perguntas rápidas:</p>
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 {QUICK_QUESTIONS.map((question, index) => (
                   <button
                     key={index}
                     onClick={() => handleQuickQuestion(question)}
-                    className="text-xs px-3 py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors font-medium"
+                    className="text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 active:bg-gray-300 transition-colors font-medium touch-manipulation"
                   >
                     {question}
                   </button>
@@ -318,7 +318,7 @@ export default function Chatbot() {
           )}
 
           {/* Input */}
-          <div className="p-4 bg-white border-t border-gray-200 rounded-b-lg">
+          <div className="p-3 sm:p-4 bg-white border-t border-gray-200 safe-area-bottom">
             <div className="flex space-x-2">
               <input
                 ref={inputRef}
@@ -327,15 +327,20 @@ export default function Chatbot() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Digite sua mensagem..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 text-sm"
+                className="flex-1 px-2.5 sm:px-3 py-2 sm:py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 text-sm sm:text-sm touch-manipulation"
                 disabled={isLoading}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
               />
               <button
                 onClick={() => handleSendMessage()}
                 disabled={!inputText.trim() || isLoading}
-                className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                className="px-3 sm:px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 active:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center touch-manipulation min-w-[44px]"
+                aria-label="Enviar mensagem"
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-4 h-4 sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>

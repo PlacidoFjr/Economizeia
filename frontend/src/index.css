@@ -144,3 +144,86 @@ button:hover, .btn:hover {
   display: none !important;
 }
 
+/* Mobile optimizations - iPhone 14 Pro Max e outros dispositivos */
+@supports (padding: max(0px)) {
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  
+  .safe-area-inset {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Prevenir zoom automático no iOS ao focar inputs */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+  font-size: 16px !important; /* iOS não faz zoom se font-size >= 16px */
+}
+
+@media screen and (max-width: 640px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch targets maiores para mobile (mínimo 44x44px) */
+@media (max-width: 640px) {
+  button,
+  a,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Melhorar scroll no mobile */
+@media (max-width: 640px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevenir pull-to-refresh acidental */
+  body {
+    overscroll-behavior-y: contain;
+  }
+}
+
+/* Ajustes específicos para telas grandes de iPhone (iPhone 14 Pro Max, etc) */
+@media screen and (min-width: 428px) and (max-width: 896px) {
+  /* iPhone 14 Pro Max e similares */
+  .chatbot-container {
+    max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}
+
+/* Prevenir seleção de texto acidental no mobile */
+@media (max-width: 640px) {
+  button,
+  .touch-manipulation {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}
+
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
