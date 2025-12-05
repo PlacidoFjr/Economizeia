@@ -48,26 +48,79 @@ async def chat_with_assistant(
         expense_data = await ai_service.extract_expense_from_message(chat_data.message)
         
         # Detectar se é receita ou despesa baseado na mensagem (mais palavras-chave)
-        message_lower = chat_data.message.lower()
+        message_lower = chat_data.message.lower().strip()
         is_income = any(keyword in message_lower for keyword in [
             'receita', 'ganho', 'entrada', 'salário', 'renda', 'adicionar em receita',
             'adicionar receita', 'criar receita', 'adicionar como receita', 'sim pode adicionar em receita',
             'adicionar em receita', 'adicionar como receita', 'receita de', 'ganhei', 'encontrei', 'achei',
-            'achado', 'dinheiro encontrado', 'dinheiro achado'
+            'achado', 'dinheiro encontrado', 'dinheiro achado', 'coloca', 'põe', 'adiciona', 'registra'
         ])
         is_expense = any(keyword in message_lower for keyword in [
             'despesa', 'gasto', 'saída', 'boleto', 'conta', 'pagamento', 'adicionar despesa',
             'criar despesa', 'adicionar gasto', 'paguei', 'gastei'
         ])
         
+        # Verificar histórico da conversa para detectar confirmações
+        conversation_history = chat_data.conversation_history or []
+        has_pending_transaction = False
+        pending_amount = None
+        pending_type = None
+        pending_issuer = None
+        
+        # Procurar no histórico por menções de valores e tipos
+        for msg in reversed(conversation_history[-5:]):  # Últimas 5 mensagens
+            msg_text = (msg.get('text') or msg.get('message') or '').lower()
+            # Procurar por valores (R$ X,XX ou X reais)
+            import re
+            amount_match = re.search(r'r?\$?\s*(\d+[.,]\d{2}|\d+)\s*(reais?)?', msg_text)
+            if amount_match:
+                amount_str = amount_match.group(1).replace(',', '.')
+                try:
+                    pending_amount = float(amount_str)
+                    # Verificar se menciona receita
+                    if any(kw in msg_text for kw in ['receita', 'ganho', 'entrada', 'salário']):
+                        pending_type = BillType.INCOME
+                        has_pending_transaction = True
+                    # Verificar se menciona despesa
+                    elif any(kw in msg_text for kw in ['despesa', 'gasto', 'pago', 'paguei']):
+                        pending_type = BillType.EXPENSE
+                        has_pending_transaction = True
+                    # Se não especificar, verificar contexto atual
+                    elif is_income:
+                        pending_type = BillType.INCOME
+                        has_pending_transaction = True
+                    elif is_expense:
+                        pending_type = BillType.EXPENSE
+                        has_pending_transaction = True
+                except:
+                    pass
+        
         # Se não detectar explicitamente, assumir despesa (comportamento padrão)
         transaction_type = BillType.INCOME if is_income and not is_expense else BillType.EXPENSE
+        if pending_type:
+            transaction_type = pending_type
         
         logger.info(f"Chat message: {chat_data.message}")
         logger.info(f"Expense data extracted: {expense_data}")
         logger.info(f"Is income: {is_income}, Is expense: {is_expense}, Transaction type: {transaction_type}")
+        logger.info(f"Has pending transaction: {has_pending_transaction}, Amount: {pending_amount}")
         
-        if expense_data and expense_data.get("action") == "create_expense":
+        # Se detectar confirmação simples ("sim", "pode", "confirma") e houver transação pendente
+        is_confirmation = any(word in message_lower for word in ['sim', 'pode', 'confirma', 'ok', 'tudo bem', 'pode adicionar', 'adiciona', 'coloca', 'põe'])
+        
+        if (expense_data and expense_data.get("action") == "create_expense") or (is_confirmation and has_pending_transaction and pending_amount):
+            # Criar transação (despesa ou receita)
+            try:
+                # Usar valor do expense_data ou do histórico
+                amount = expense_data.get("amount") if expense_data and expense_data.get("amount") else pending_amount
+                
+                # Validar dados mínimos
+                if not amount or amount <= 0:
+                    transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
+                    return ChatResponse(
+                        response=f"Não consegui identificar o valor da {transaction_label}. Por favor, informe o valor. Exemplo: 'Adicionar {transaction_label} de R$ 150,50'",
+                        action="error"
+                    )
             # Criar transação (despesa ou receita)
             try:
                 # Validar dados mínimos
@@ -90,11 +143,15 @@ async def chat_with_assistant(
                     except:
                         due_date = date.today()
                 
-                # Determinar issuer baseado no tipo
-                if transaction_type == BillType.INCOME:
-                    default_issuer = expense_data.get("issuer") or "Receita Manual"
+                # Determinar issuer baseado no tipo e histórico
+                if expense_data and expense_data.get("issuer"):
+                    default_issuer = expense_data.get("issuer")
+                elif pending_issuer:
+                    default_issuer = pending_issuer
+                elif transaction_type == BillType.INCOME:
+                    default_issuer = "Receita Manual"
                 else:
-                    default_issuer = expense_data.get("issuer") or "Despesa Manual"
+                    default_issuer = "Despesa Manual"
                 
                 # Criar transação (não é boleto, é transação manual)
                 bill = Bill(
