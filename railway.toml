@@ -6,8 +6,13 @@
 builder = "DOCKERFILE"
 dockerfilePath = "backend/Dockerfile"
 # Context é a raiz do projeto (não backend/)
+# Forçar rebuild sem cache em caso de problemas
+# buildCommand = "docker build --no-cache -f backend/Dockerfile ."
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+# Healthcheck para garantir que o container está rodando
+healthcheckPath = "/health"
+healthcheckTimeout = 100
 
