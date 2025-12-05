@@ -148,11 +148,19 @@ export default function Dashboard() {
     { name: 'Despesas', valor: expensesThisMonth, color: '#ef4444' }, // Vermelho para despesas
   ]
 
-  const pendingBills = allTransactions?.filter((b: any) => b.status === 'pending' || b.status === 'confirmed') || []
+  const pendingBills = allTransactions?.filter((b: any) => 
+    (b.status === 'pending' || b.status === 'confirmed') && 
+    b.type === 'expense' && 
+    b.is_bill === true
+  ) || []
   const overdueBills = allTransactions?.filter((b: any) => {
     if (!b.due_date) return false
     const dueDate = new Date(b.due_date)
-    return dueDate < new Date() && b.status !== 'paid'
+    // Apenas despesas/boletos vencidos (não receitas)
+    return dueDate < new Date() && 
+           b.status !== 'paid' && 
+           b.type === 'expense' && 
+           b.is_bill === true
   }) || []
   const totalPending = pendingBills.reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
   // const scheduledPayments = payments?.filter((p: any) => p.status === 'scheduled').length || 0
