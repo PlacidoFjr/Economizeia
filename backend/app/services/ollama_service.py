@@ -87,11 +87,12 @@ Metadata: {json.dumps(user_input['meta'])}"""
                     extracted = json.loads(response_text)
                     
                     # Validate and normalize
-                    if "confidence" not in extracted:
-                        extracted["confidence"] = 0.7
-                    
                     if "currency" not in extracted:
                         extracted["currency"] = "BRL"
+                    
+                    # Calcular confiança baseada nos campos extraídos se não foi fornecida ou for 0.0
+                    if "confidence" not in extracted or extracted.get("confidence", 0.0) == 0.0:
+                        extracted["confidence"] = self._calculate_confidence(extracted)
                     
                     return extracted
                     
@@ -130,9 +131,40 @@ Metadata: {json.dumps(user_input['meta'])}"""
                 "due_date": None,
                 "barcode": None,
                 "payment_place": None,
-                "confidence": 0.0,
+                "confidence": 0.3,  # Mínimo 30% mesmo em erro
                 "notes": f"Erro: {str(e)}"
             }
+    
+    def _calculate_confidence(self, extracted: Dict[str, Any]) -> float:
+        """
+        Calcula confiança baseada nos campos extraídos.
+        - amount + due_date: 0.85-0.9
+        - amount OU due_date: 0.6-0.7
+        - issuer apenas: 0.4-0.5
+        - Nada: 0.3
+        """
+        has_amount = extracted.get("amount") is not None and extracted.get("amount") != 0
+        has_due_date = extracted.get("due_date") is not None
+        has_issuer = extracted.get("issuer") is not None and extracted.get("issuer") != ""
+        has_barcode = extracted.get("barcode") is not None and extracted.get("barcode") != ""
+        
+        if has_amount and has_due_date:
+            # Campos principais extraídos: alta confiança
+            base_confidence = 0.85
+            if has_issuer:
+                base_confidence += 0.05
+            if has_barcode:
+                base_confidence += 0.05
+            return min(base_confidence, 0.95)
+        elif has_amount or has_due_date:
+            # Apenas um campo principal: média confiança
+            return 0.65 if has_issuer else 0.55
+        elif has_issuer:
+            # Apenas emissor: baixa confiança
+            return 0.45
+        else:
+            # Nada extraído: muito baixa confiança
+            return 0.3
     
     async def categorize_and_detect_anomaly(self, description: str, amount: float,
                                            user_profile: Optional[Dict] = None) -> Dict[str, Any]:

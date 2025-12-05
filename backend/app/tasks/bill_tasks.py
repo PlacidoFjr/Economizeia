@@ -91,7 +91,30 @@ def process_bill_upload(bill_id: str, document_id: str):
         if extracted.get("currency"):
             bill.currency = extracted["currency"]
         
-        bill.confidence = extracted.get("confidence", 0.0)
+        # Calcular confiança: usar a do AI se fornecida e > 0, senão calcular baseado nos campos
+        ai_confidence = extracted.get("confidence", 0.0)
+        if ai_confidence > 0:
+            bill.confidence = ai_confidence
+        else:
+            # Calcular confiança baseada nos campos extraídos
+            has_amount = bill.amount is not None and bill.amount > 0
+            has_due_date = bill.due_date is not None
+            has_issuer = bill.issuer is not None and bill.issuer != ""
+            has_barcode = bill.barcode is not None and bill.barcode != ""
+            
+            if has_amount and has_due_date:
+                bill.confidence = 0.85
+                if has_issuer:
+                    bill.confidence += 0.05
+                if has_barcode:
+                    bill.confidence += 0.05
+                bill.confidence = min(bill.confidence, 0.95)
+            elif has_amount or has_due_date:
+                bill.confidence = 0.65 if has_issuer else 0.55
+            elif has_issuer:
+                bill.confidence = 0.45
+            else:
+                bill.confidence = max(ocr_confidence, 0.3)  # Usar OCR confidence como mínimo
         
         # Categorize with Ollama
         if bill.issuer and bill.amount:

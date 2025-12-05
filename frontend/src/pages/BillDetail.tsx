@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { useState } from 'react'
 import { Check, X, Calendar, DollarSign, ArrowLeft, FileText } from 'lucide-react'
@@ -8,6 +8,7 @@ import { translateStatus } from '../utils/translations'
 export default function BillDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showSchedule, setShowSchedule] = useState(false)
   const [scheduledDate, setScheduledDate] = useState('')
   const [notifyDays] = useState([7, 3, 1])
@@ -29,7 +30,9 @@ export default function BillDetail() {
       return response.data
     },
     onSuccess: () => {
-      window.location.reload()
+      // Invalidar e recarregar os dados sem fazer reload da página
+      queryClient.invalidateQueries({ queryKey: ['bill', id] })
+      queryClient.invalidateQueries({ queryKey: ['bills'] })
     },
   })
 
