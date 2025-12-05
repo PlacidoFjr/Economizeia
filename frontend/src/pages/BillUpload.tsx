@@ -51,6 +51,13 @@ export default function BillUpload() {
     }
   }
 
+  const handleFileButtonClick = () => {
+    const fileInput = document.getElementById('file-upload') as HTMLInputElement
+    if (fileInput) {
+      fileInput.click()
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (file) {
@@ -102,13 +109,14 @@ export default function BillUpload() {
                 <Upload className="w-8 h-8 sm:w-10 sm:h-10 text-gray-600" />
               </div>
               <div>
-                <label
-                  htmlFor="file-upload"
+                <button
+                  type="button"
+                  onClick={handleFileButtonClick}
                   className="cursor-pointer inline-flex items-center px-4 sm:px-4 py-2.5 sm:py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
                 >
                   <Upload className="w-4 h-4 mr-2" />
                   Selecionar Arquivo
-                </label>
+                </button>
                 <input
                   id="file-upload"
                   type="file"
