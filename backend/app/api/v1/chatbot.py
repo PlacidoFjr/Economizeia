@@ -3,8 +3,10 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from sqlalchemy.orm import Session
 from datetime import date, datetime
+from dateutil.relativedelta import relativedelta
 import uuid
 import logging
+import re
 
 from app.db.database import get_db
 from app.db.models import User, Bill, BillStatus, BillType
@@ -66,12 +68,13 @@ async def chat_with_assistant(
         pending_amount = None
         pending_type = None
         pending_issuer = None
+        pending_installment_total = None
+        pending_is_installment = False
         
         # Procurar no histórico por menções de valores, tipos, categorias e emissores
         for msg in reversed(conversation_history[-5:]):  # Últimas 5 mensagens
             msg_text = (msg.get('text') or msg.get('message') or '').lower()
             # Procurar por valores (R$ X,XX ou X reais)
-            import re
             amount_match = re.search(r'r?\$?\s*(\d+[.,]\d{2}|\d+)\s*(reais?)?', msg_text)
             if amount_match:
                 amount_str = amount_match.group(1).replace(',', '.')
@@ -94,6 +97,18 @@ async def chat_with_assistant(
                         has_pending_transaction = True
                 except:
                     pass
+            
+            # Procurar por número de parcelas no histórico
+            if not pending_installment_total:
+                # Padrões: "3x", "6 vezes", "parcelado em 12", "dividido em 4"
+                installment_match = re.search(r'(\d+)\s*(x|vezes|parcelas?)', msg_text)
+                if installment_match:
+                    try:
+                        pending_installment_total = int(installment_match.group(1))
+                        pending_is_installment = True
+                        logger.info(f"📦 Parcelamento detectado no histórico: {pending_installment_total} parcelas")
+                    except:
+                        pass
             
             # Procurar por categoria no histórico (palavras-chave de categorias)
             if not pending_issuer:  # Só procurar se ainda não tiver emissor
@@ -161,6 +176,35 @@ async def chat_with_assistant(
                 # Se não conseguir determinar, assumir despesa (comportamento padrão)
                 transaction_type = BillType.EXPENSE
             logger.info(f"❓ Prompt retornou ask_for_info - tipo: {transaction_type.value}, missing: {expense_data.get('missing_info')}")
+        
+        # Verificar se menciona parcelamento e extrair número de parcelas da mensagem atual
+        is_installment_mentioned = any(word in message_lower for word in ['parcelado', 'parcela', 'parcelas', 'vezes', 'dividido'])
+        installment_total = None
+        
+        # Tentar extrair número de parcelas da mensagem atual
+        if is_installment_mentioned:
+            installment_match = re.search(r'(\d+)\s*(x|vezes|parcelas?)', message_lower)
+            if installment_match:
+                try:
+                    installment_total = int(installment_match.group(1))
+                    logger.info(f"📦 Parcelamento detectado: {installment_total} parcelas")
+                except:
+                    pass
+        
+        # Se mencionou parcelamento mas não tem o número, perguntar
+        if (expense_data and expense_data.get("is_installment") and not expense_data.get("installment_total") and not installment_total) or \
+           (is_installment_mentioned and not installment_total and not pending_installment_total):
+            amount = expense_data.get("amount") if expense_data else pending_amount
+            if amount and amount > 0:
+                transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
+                return ChatResponse(
+                    response=f"Entendi! Você {transaction_label} R$ {amount:.2f} parcelado. Em quantas vezes foi parcelado? (ex: 3x, 6x, 12x)",
+                    action="ask_for_info"
+                )
+        
+        # Usar número de parcelas extraído ou do histórico
+        final_installment_total = installment_total or pending_installment_total or (expense_data.get("installment_total") if expense_data else None)
+        final_is_installment = final_installment_total is not None and final_installment_total > 1
         
         # Se precisa perguntar mais informações, fazer pergunta contextual
         if needs_info:
@@ -292,37 +336,86 @@ async def chat_with_assistant(
                 elif transaction_type == BillType.INCOME:
                     final_category = "outras"  # Receitas geralmente não têm categoria específica
                 
-                bill = Bill(
-                    id=uuid.uuid4(),
-                    user_id=current_user.id,
-                    issuer=default_issuer,
-                    amount=float(final_amount),
-                    currency="BRL",
-                    due_date=due_date,
-                    status=BillStatus.CONFIRMED,
-                    confidence=0.9,
-                    category=final_category,
-                    type=transaction_type,  # EXPENSE ou INCOME
-                    is_bill=False  # Transação manual, não é boleto
-                )
-                
-                db.add(bill)
-                db.commit()
-                db.refresh(bill)
-                
-                logger.info(f"✅ Transação criada no banco: ID={bill.id}, Type={bill.type.value}, Amount={bill.amount}, IsBill={bill.is_bill}, Status={bill.status.value}")
-                
-                # Preparar resposta
-                transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
-                issuer_text = f" de {bill.issuer}" if bill.issuer not in ["Receita Manual", "Despesa Manual"] else ""
-                date_text = f" com vencimento em {bill.due_date.strftime('%d/%m/%Y')}" if bill.due_date else ""
-                
-                response_text = f"✅ {transaction_label.capitalize()} criada com sucesso!{issuer_text} no valor de R$ {bill.amount:.2f}{date_text}."
-                
-                if expense_data.get("is_installment"):
-                    response_text += f" Esta é a parcela {expense_data.get('installment_current', 1)} de {expense_data.get('installment_total', 1)}."
-                
-                action_name = "income_created" if transaction_type == BillType.INCOME else "expense_created"
+                # Se for parcelamento, criar múltiplas transações
+                if final_is_installment and final_installment_total and final_installment_total > 1:
+                    # Calcular valor de cada parcela
+                    installment_amount = final_amount / final_installment_total
+                    
+                    # Criar todas as parcelas
+                    created_bills = []
+                    for i in range(1, final_installment_total + 1):
+                        # Calcular data de vencimento (primeira parcela na data informada, demais a cada mês)
+                        installment_due_date = due_date
+                        if i > 1:
+                            installment_due_date = due_date + relativedelta(months=i-1)
+                        
+                        bill = Bill(
+                            id=uuid.uuid4(),
+                            user_id=current_user.id,
+                            issuer=default_issuer,
+                            amount=round(installment_amount, 2),
+                            currency="BRL",
+                            due_date=installment_due_date,
+                            status=BillStatus.CONFIRMED,
+                            confidence=0.9,
+                            category=final_category,
+                            type=transaction_type,
+                            is_bill=False
+                        )
+                        
+                        db.add(bill)
+                        created_bills.append(bill)
+                    
+                    db.commit()
+                    for bill in created_bills:
+                        db.refresh(bill)
+                    
+                    logger.info(f"✅ {final_installment_total} parcelas criadas no banco: Total R$ {final_amount:.2f}, Valor por parcela R$ {installment_amount:.2f}")
+                    
+                    # Preparar resposta
+                    transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
+                    issuer_text = f" de {default_issuer}" if default_issuer not in ["Receita Manual", "Despesa Manual"] else ""
+                    
+                    first_due = created_bills[0].due_date.strftime('%d/%m/%Y')
+                    last_due = created_bills[-1].due_date.strftime('%d/%m/%Y')
+                    
+                    response_text = f"✅ {final_installment_total} parcelas de {transaction_label}{issuer_text} criadas com sucesso!\n\n"
+                    response_text += f"💰 Valor total: R$ {final_amount:.2f}\n"
+                    response_text += f"💵 Valor por parcela: R$ {installment_amount:.2f}\n"
+                    response_text += f"📅 Primeira parcela: {first_due}\n"
+                    response_text += f"📅 Última parcela: {last_due}"
+                    
+                    action_name = "income_created" if transaction_type == BillType.INCOME else "expense_created"
+                else:
+                    # Criar transação única (não parcelada)
+                    bill = Bill(
+                        id=uuid.uuid4(),
+                        user_id=current_user.id,
+                        issuer=default_issuer,
+                        amount=float(final_amount),
+                        currency="BRL",
+                        due_date=due_date,
+                        status=BillStatus.CONFIRMED,
+                        confidence=0.9,
+                        category=final_category,
+                        type=transaction_type,  # EXPENSE ou INCOME
+                        is_bill=False  # Transação manual, não é boleto
+                    )
+                    
+                    db.add(bill)
+                    db.commit()
+                    db.refresh(bill)
+                    
+                    logger.info(f"✅ Transação criada no banco: ID={bill.id}, Type={bill.type.value}, Amount={bill.amount}, IsBill={bill.is_bill}, Status={bill.status.value}")
+                    
+                    # Preparar resposta
+                    transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
+                    issuer_text = f" de {bill.issuer}" if bill.issuer not in ["Receita Manual", "Despesa Manual"] else ""
+                    date_text = f" com vencimento em {bill.due_date.strftime('%d/%m/%Y')}" if bill.due_date else ""
+                    
+                    response_text = f"✅ {transaction_label.capitalize()} criada com sucesso!{issuer_text} no valor de R$ {bill.amount:.2f}{date_text}."
+                    
+                    action_name = "income_created" if transaction_type == BillType.INCOME else "expense_created"
                 
                 logger.info(f"Retornando action: {action_name}, bill_id: {bill.id}")
                 
