@@ -64,13 +64,26 @@ async def reset_all_users():
     """
     ⚠️ ENDPOINT TEMPORÁRIO - Deleta todos os usuários do banco de dados.
     Use apenas para desenvolvimento/testes. Remover em produção!
+    
+    Nota: audit_logs não pode ser deletado (trigger de imutabilidade),
+    então apenas setamos user_id como NULL nos logs.
     """
+    from app.db.models import AuditLog
+    from sqlalchemy import text
+    
     db = SessionLocal()
     try:
         # Contar usuários antes
         count_before = db.query(User).count()
         
+        # Primeiro, remover referências de user_id em audit_logs
+        # (não podemos deletar audit_logs por causa do trigger de imutabilidade)
+        logger.info("Removendo referências de user_id em audit_logs...")
+        db.execute(text("UPDATE audit_logs SET user_id = NULL WHERE user_id IS NOT NULL"))
+        
         # Deletar todos os usuários (cascade vai deletar relacionamentos)
+        # Relacionamentos com cascade: accounts, bills, payments, notifications, savings_goals, investments
+        logger.info("Deletando usuários e dados relacionados...")
         db.query(User).delete()
         db.commit()
         
@@ -81,7 +94,8 @@ async def reset_all_users():
         return {
             "message": f"Todos os usuários foram deletados com sucesso.",
             "deleted_count": count_before,
-            "remaining_count": count_after
+            "remaining_count": count_after,
+            "note": "Audit logs foram mantidos (imutáveis), mas referências de user_id foram removidas."
         }
     except Exception as e:
         db.rollback()
