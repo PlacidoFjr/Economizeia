@@ -3,13 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
     <title>Bem-vindo ao EconomizeIA</title>
+    <style>
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            .email-container {
+                background-color: #111827 !important;
+            }
+            .email-card {
+                background-color: #1f2937 !important;
+            }
+            .email-text-primary {
+                color: #f9fafb !important;
+            }
+            .email-text-secondary {
+                color: #d1d5db !important;
+            }
+            .email-text-tertiary {
+                color: #9ca3af !important;
+            }
+            .email-bg-light {
+                background-color: #374151 !important;
+            }
+            .email-border {
+                border-color: #4b5563 !important;
+            }
+            .email-feature-bg {
+                background-color: #374151 !important;
+            }
+            .email-button {
+                background-color: #3b82f6 !important;
+                color: #ffffff !important;
+            }
+        }
+        /* Fallback para clientes que não suportam media queries */
+        [data-ogsc] .email-container {
+            background-color: #111827;
+        }
+        [data-ogsc] .email-card {
+            background-color: #1f2937;
+        }
+    </style>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
-    <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
+    <table role="presentation" class="email-container" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
         <tr>
             <td align="center" style="padding: 40px 20px;">
-                <table role="presentation" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                <table role="presentation" class="email-card" style="max-width: 600px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
                     
                     <!-- Header -->
                     <tr>
@@ -25,14 +67,14 @@
                     
                     <!-- Welcome Message -->
                     <tr>
-                        <td style="padding: 50px 40px 30px 40px;">
-                            <h2 style="margin: 0 0 24px 0; color: #111827; font-size: 28px; font-weight: 700; line-height: 1.3;">
+                        <td style="padding: 50px 40px 30px 40px; background-color: #ffffff;">
+                            <h2 class="email-text-primary" style="margin: 0 0 24px 0; color: #111827; font-size: 28px; font-weight: 700; line-height: 1.3;">
                                 Bem-vindo, {{name}}! 🎉
                             </h2>
-                            <p style="margin: 0 0 20px 0; color: #374151; font-size: 17px; line-height: 1.7;">
+                            <p class="email-text-secondary" style="margin: 0 0 20px 0; color: #374151; font-size: 17px; line-height: 1.7;">
                                 Ficamos muito felizes em tê-lo conosco! Sua conta no <strong style="color: #1f2937;">EconomizeIA</strong> foi criada com sucesso e você já pode começar a organizar suas finanças de forma inteligente.
                             </p>
-                            <p style="margin: 0; color: #4b5563; font-size: 16px; line-height: 1.7;">
+                            <p class="email-text-tertiary" style="margin: 0; color: #4b5563; font-size: 16px; line-height: 1.7;">
                                 Prepare-se para ter uma visão clara e completa das suas finanças, com a ajuda da inteligência artificial e ferramentas intuitivas.
                             </p>
                         </td>
@@ -40,15 +82,15 @@
                     
                     <!-- Features Section -->
                     <tr>
-                        <td style="padding: 0 40px 40px 40px;">
-                            <h3 style="margin: 0 0 24px 0; color: #111827; font-size: 20px; font-weight: 600; line-height: 1.4;">
+                        <td style="padding: 0 40px 40px 40px; background-color: #ffffff;">
+                            <h3 class="email-text-primary" style="margin: 0 0 24px 0; color: #111827; font-size: 20px; font-weight: 600; line-height: 1.4;">
                                 O que você pode fazer:
                             </h3>
                             
                             <!-- Feature 1 -->
                             <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                                 <tr>
-                                    <td style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #3b82f6;">
+                                    <td class="email-feature-bg" style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #3b82f6;">
                                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                             <tr>
                                                 <td style="width: 56px; vertical-align: top; padding-right: 16px;">
@@ -57,10 +99,10 @@
                                                     </div>
                                                 </td>
                                                 <td style="vertical-align: top;">
-                                                    <h4 style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
+                                                    <h4 class="email-text-primary" style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
                                                         Upload Automático
                                                     </h4>
-                                                    <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
+                                                    <p class="email-text-tertiary" style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
                                                         Envie seus boletos e faturas. Nossa IA extrai as informações automaticamente, economizando seu tempo.
                                                     </p>
                                                 </td>
@@ -73,7 +115,7 @@
                             <!-- Feature 2 -->
                             <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                                 <tr>
-                                    <td style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #10b981;">
+                                    <td class="email-feature-bg" style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #10b981;">
                                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                             <tr>
                                                 <td style="width: 56px; vertical-align: top; padding-right: 16px;">
@@ -82,10 +124,10 @@
                                                     </div>
                                                 </td>
                                                 <td style="vertical-align: top;">
-                                                    <h4 style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
+                                                    <h4 class="email-text-primary" style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
                                                         Dashboard Inteligente
                                                     </h4>
-                                                    <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
+                                                    <p class="email-text-tertiary" style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
                                                         Visualize seus gastos, receitas e tendências em gráficos detalhados e fáceis de entender.
                                                     </p>
                                                 </td>
@@ -98,7 +140,7 @@
                             <!-- Feature 3 -->
                             <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                                 <tr>
-                                    <td style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #8b5cf6;">
+                                    <td class="email-feature-bg" style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #8b5cf6;">
                                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                             <tr>
                                                 <td style="width: 56px; vertical-align: top; padding-right: 16px;">
@@ -107,10 +149,10 @@
                                                     </div>
                                                 </td>
                                                 <td style="vertical-align: top;">
-                                                    <h4 style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
+                                                    <h4 class="email-text-primary" style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
                                                         Lembretes Automáticos
                                                     </h4>
-                                                    <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
+                                                    <p class="email-text-tertiary" style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
                                                         Receba notificações antes dos vencimentos e nunca mais perca um pagamento importante.
                                                     </p>
                                                 </td>
@@ -123,7 +165,7 @@
                             <!-- Feature 4 -->
                             <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                 <tr>
-                                    <td style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #f59e0b;">
+                                    <td class="email-feature-bg" style="padding: 24px; background-color: #f9fafb; border-radius: 10px; border-left: 4px solid #f59e0b;">
                                         <table role="presentation" style="width: 100%; border-collapse: collapse;">
                                             <tr>
                                                 <td style="width: 56px; vertical-align: top; padding-right: 16px;">
@@ -132,10 +174,10 @@
                                                     </div>
                                                 </td>
                                                 <td style="vertical-align: top;">
-                                                    <h4 style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
+                                                    <h4 class="email-text-primary" style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600; line-height: 1.4;">
                                                         Assistente Virtual
                                                     </h4>
-                                                    <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
+                                                    <p class="email-text-tertiary" style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.6;">
                                                         Converse com nosso assistente IA para adicionar despesas, receitas e obter ajuda instantânea.
                                                     </p>
                                                 </td>
@@ -149,8 +191,8 @@
                     
                     <!-- CTA Button -->
                     <tr>
-                        <td style="padding: 0 40px 40px 40px; text-align: center;">
-                            <a href="{{frontend_url}}/dashboard" style="display: inline-block; padding: 16px 40px; background-color: #1f2937; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 17px; line-height: 1.5; transition: background-color 0.3s;">
+                        <td style="padding: 0 40px 40px 40px; text-align: center; background-color: #ffffff;">
+                            <a href="{{frontend_url}}/dashboard" class="email-button" style="display: inline-block; padding: 16px 40px; background-color: #1f2937; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 17px; line-height: 1.5; transition: background-color 0.3s;">
                                 Começar Agora →
                             </a>
                         </td>
@@ -158,11 +200,11 @@
                     
                     <!-- Help Section -->
                     <tr>
-                        <td style="padding: 40px; background-color: #f9fafb; border-top: 2px solid #e5e7eb;">
-                            <p style="margin: 0 0 16px 0; color: #374151; font-size: 16px; line-height: 1.7;">
-                                <strong style="color: #111827;">Precisa de ajuda?</strong> Nosso assistente virtual está sempre disponível para responder suas dúvidas. Basta clicar no ícone de chat no canto inferior direito da tela.
+                        <td class="email-bg-light email-border" style="padding: 40px; background-color: #f9fafb; border-top: 2px solid #e5e7eb;">
+                            <p class="email-text-secondary" style="margin: 0 0 16px 0; color: #374151; font-size: 16px; line-height: 1.7;">
+                                <strong class="email-text-primary" style="color: #111827;">Precisa de ajuda?</strong> Nosso assistente virtual está sempre disponível para responder suas dúvidas. Basta clicar no ícone de chat no canto inferior direito da tela.
                             </p>
-                            <p style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.7;">
+                            <p class="email-text-tertiary" style="margin: 0; color: #6b7280; font-size: 15px; line-height: 1.7;">
                                 Se você tiver alguma dúvida ou precisar de suporte, não hesite em nos contatar. Estamos aqui para ajudar!
                             </p>
                         </td>
