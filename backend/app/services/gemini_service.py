@@ -59,8 +59,23 @@ class GeminiService:
             return response.text
             
         except Exception as e:
+            error_msg = str(e).lower()
             logger.error(f"Erro ao chamar Gemini: {e}", exc_info=True)
-            raise
+            
+            # Mensagens de erro mais específicas
+            if "api_key" in error_msg or "invalid api key" in error_msg or "authentication" in error_msg:
+                raise ValueError("GEMINI_API_KEY inválida ou não configurada. Verifique a chave da API no Railway.")
+            elif "quota" in error_msg or "limit" in error_msg or "rate limit" in error_msg:
+                raise ValueError("Limite de requisições da API do Google excedido. Tente novamente mais tarde.")
+            elif "timeout" in error_msg or "timed out" in error_msg:
+                raise ValueError("Timeout ao conectar com a API do Google. Verifique sua conexão com a internet.")
+            elif "connect" in error_msg or "connection" in error_msg or "network" in error_msg:
+                raise ValueError("Erro de conexão com a API do Google. Verifique sua conexão com a internet.")
+            elif "model" in error_msg or "not found" in error_msg:
+                raise ValueError(f"Modelo {settings.GEMINI_MODEL} não encontrado. Verifique GEMINI_MODEL no Railway.")
+            else:
+                # Re-raise com mensagem genérica mas útil
+                raise ValueError(f"Erro ao conectar com Gemini: {str(e)}")
     
     def _build_system_prompt(self, context: Dict = None) -> str:
         """Build system prompt with user financial context."""

@@ -272,20 +272,119 @@ async def chat_with_assistant(
             # Mensagem de erro mais específica baseada no tipo de erro
             error_str = str(ai_error).lower()
             service_name = "Gemini" if gemini_service else "Ollama"
-            if "connect" in error_str or "refused" in error_str or "api" in error_str:
-                if gemini_service:
-                    response_text = f"""⚠️ Erro ao conectar com {service_name}.
+            
+            # Extrair mensagem de erro específica se disponível
+            error_message = str(ai_error)
+            
+            if gemini_service:
+                # Erros específicos do Gemini
+                if "api_key" in error_str or "invalid api key" in error_str or "authentication" in error_str:
+                    response_text = f"""⚠️ **Erro de autenticação com {service_name}**
+
+**Problema:** A chave da API do Google não está configurada corretamente.
 
 **Para resolver:**
-1. Verifique se a GEMINI_API_KEY está correta no .env
-2. Verifique sua conexão com a internet
-3. Verifique os limites da API do Google
+1. Acesse o Railway Dashboard → Variables
+2. Verifique se `GEMINI_API_KEY` está configurada
+3. Verifique se a chave está correta (obtenha em: https://aistudio.google.com/apikey)
+4. Se necessário, adicione `USE_GEMINI=true` nas variáveis
 
 **Enquanto isso, você pode:**
 📄 Fazer upload de boletos manualmente
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
+                elif "quota" in error_str or "limit" in error_str or "rate limit" in error_str:
+                    response_text = f"""⚠️ **Limite da API do Google excedido**
+
+**Problema:** Você atingiu o limite de requisições da API do Gemini.
+
+**Para resolver:**
+1. Aguarde alguns minutos e tente novamente
+2. Verifique seus limites em: https://aistudio.google.com/apikey
+3. Considere fazer upgrade do plano da API do Google
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário"""
+                elif "timeout" in error_str or "timed out" in error_str:
+                    response_text = f"""⚠️ **Timeout ao conectar com {service_name}**
+
+**Problema:** A conexão com a API do Google está demorando muito.
+
+**Para resolver:**
+1. Verifique sua conexão com a internet
+2. Aguarde alguns segundos e tente novamente
+3. Verifique se há problemas com a API do Google
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário"""
+                elif "model" in error_str or "not found" in error_str:
+                    response_text = f"""⚠️ **Modelo do {service_name} não encontrado**
+
+**Problema:** O modelo configurado não está disponível.
+
+**Para resolver:**
+1. Verifique a variável `GEMINI_MODEL` no Railway
+2. Use um modelo válido como: `gemini-2.0-flash` ou `gemini-1.5-pro`
+3. Verifique modelos disponíveis em: https://aistudio.google.com/apikey
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário"""
+                elif "connect" in error_str or "connection" in error_str or "network" in error_str:
+                    response_text = f"""⚠️ **Erro de conexão com {service_name}**
+
+**Problema:** Não foi possível conectar com a API do Google.
+
+**Para resolver:**
+1. Verifique sua conexão com a internet
+2. Verifique se a `GEMINI_API_KEY` está correta no Railway
+3. Verifique os limites da API do Google
+4. Tente novamente em alguns instantes
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário"""
+                else:
+                    # Mensagem genérica mas com a mensagem de erro específica
+                    response_text = f"""⚠️ **Erro ao conectar com {service_name}**
+
+**Detalhes:** {error_message}
+
+**Para resolver:**
+1. Verifique se a `GEMINI_API_KEY` está correta no Railway
+2. Verifique sua conexão com a internet
+3. Verifique os limites da API do Google
+4. Tente novamente em alguns instantes
+
+**Enquanto isso, você pode:**
+📄 Fazer upload de boletos manualmente
+📊 Visualizar seu dashboard
+🔔 Configurar lembretes
+💰 Adicionar despesas via formulário"""
+            else:
+                # Erros do Ollama
+                if "timeout" in error_str:
+                    response_text = """⏱️ O servidor de IA está demorando para responder.
+
+Mas posso ajudá-lo com informações rápidas:
+
+📄 **Upload de Boletos**: Acesse "Boletos" > "Upload"
+📊 **Dashboard**: Veja seus gastos e receitas
+🔔 **Lembretes**: Configure notificações antes dos vencimentos
+🤖 **Adicionar Despesa**: Digite "Adicionar despesa de R$ 150,50 para energia"
+
+Tente novamente em alguns instantes ou use as funcionalidades do menu."""
                 else:
                     response_text = f"""⚠️ O servidor de IA ({service_name}) não está disponível.
 
@@ -301,19 +400,9 @@ async def chat_with_assistant(
 💰 Adicionar despesas via formulário
 
 Tente novamente após iniciar o Ollama."""
-            elif "timeout" in error_str:
-                response_text = """⏱️ O servidor de IA está demorando para responder.
-
-Mas posso ajudá-lo com informações rápidas:
-
-📄 **Upload de Boletos**: Acesse "Boletos" > "Upload"
-📊 **Dashboard**: Veja seus gastos e receitas
-🔔 **Lembretes**: Configure notificações antes dos vencimentos
-🤖 **Adicionar Despesa**: Digite "Adicionar despesa de R$ 150,50 para energia"
-
-Tente novamente em alguns instantes ou use as funcionalidades do menu."""
-            else:
-                # Resposta de fallback genérica
+            
+            # Garantir que response_text está definido (fallback genérico)
+            if 'response_text' not in locals() or not response_text:
                 response_text = f"""⚠️ Erro ao conectar com o servidor de IA ({service_name}): {str(ai_error)[:100]}
 
 **O que posso fazer:**
