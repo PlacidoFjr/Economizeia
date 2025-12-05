@@ -105,6 +105,22 @@ export default function Home() {
             categorize automaticamente e tenha controle total do seu orçamento.
           </p>
 
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center mb-12 sm:mb-16 px-4">
+            <Link
+              to="/register"
+              className="w-full sm:w-auto flex justify-center items-center py-3 sm:py-4 px-6 sm:px-8 border border-transparent text-sm sm:text-base font-semibold rounded-lg text-white bg-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all shadow-md hover:shadow-lg"
+            >
+              Criar Conta Grátis
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
+            </Link>
+            <Link
+              to="/login"
+              className="w-full sm:w-auto bg-white border-2 border-gray-300 text-gray-700 px-6 sm:px-8 py-3 sm:py-4 rounded-lg font-semibold text-sm sm:text-base hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 flex items-center justify-center"
+            >
+              Já tenho conta
+            </Link>
+          </div>
+
           {/* Benefits List */}
           <div className="flex flex-wrap justify-center gap-3 sm:gap-4 md:gap-6 text-gray-600 px-4">
             {BENEFITS.map((benefit, index) => (
