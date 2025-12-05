@@ -44,16 +44,31 @@ async def chat_with_assistant(
         gemini_service = get_gemini_service()
         ai_service = gemini_service if gemini_service else ollama_service
         
-        # Primeiro, tentar extrair informações de criação de despesa
+        # Primeiro, tentar extrair informações de criação de transação (despesa ou receita)
         expense_data = await ai_service.extract_expense_from_message(chat_data.message)
         
+        # Detectar se é receita ou despesa baseado na mensagem
+        message_lower = chat_data.message.lower()
+        is_income = any(keyword in message_lower for keyword in [
+            'receita', 'ganho', 'entrada', 'salário', 'renda', 'adicionar em receita',
+            'adicionar receita', 'criar receita', 'adicionar como receita'
+        ])
+        is_expense = any(keyword in message_lower for keyword in [
+            'despesa', 'gasto', 'saída', 'boleto', 'conta', 'pagamento', 'adicionar despesa',
+            'criar despesa', 'adicionar gasto'
+        ])
+        
+        # Se não detectar explicitamente, assumir despesa (comportamento padrão)
+        transaction_type = BillType.INCOME if is_income and not is_expense else BillType.EXPENSE
+        
         if expense_data and expense_data.get("action") == "create_expense":
-            # Criar despesa/boleto
+            # Criar transação (despesa ou receita)
             try:
                 # Validar dados mínimos
                 if not expense_data.get("amount") or expense_data.get("amount") <= 0:
+                    transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
                     return ChatResponse(
-                        response="Não consegui identificar o valor da despesa. Por favor, informe o valor. Exemplo: 'Adicionar despesa de R$ 150,50'",
+                        response=f"Não consegui identificar o valor da {transaction_label}. Por favor, informe o valor. Exemplo: 'Adicionar {transaction_label} de R$ 150,50'",
                         action="error"
                     )
                 
@@ -69,17 +84,25 @@ async def chat_with_assistant(
                     except:
                         due_date = date.today()
                 
-                # Criar boleto/despesa
+                # Determinar issuer baseado no tipo
+                if transaction_type == BillType.INCOME:
+                    default_issuer = expense_data.get("issuer") or "Receita Manual"
+                else:
+                    default_issuer = expense_data.get("issuer") or "Despesa Manual"
+                
+                # Criar transação (não é boleto, é transação manual)
                 bill = Bill(
                     id=uuid.uuid4(),
                     user_id=current_user.id,
-                    issuer=expense_data.get("issuer") or "Despesa Manual",
+                    issuer=default_issuer,
                     amount=float(expense_data.get("amount", 0)),
                     currency="BRL",
                     due_date=due_date,
                     status=BillStatus.CONFIRMED,
                     confidence=0.9,
-                    category=expense_data.get("category")
+                    category=expense_data.get("category"),
+                    type=transaction_type,  # EXPENSE ou INCOME
+                    is_bill=False  # Transação manual, não é boleto
                 )
                 
                 db.add(bill)
@@ -87,24 +110,28 @@ async def chat_with_assistant(
                 db.refresh(bill)
                 
                 # Preparar resposta
-                issuer_text = f" de {bill.issuer}" if bill.issuer != "Despesa Manual" else ""
+                transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
+                issuer_text = f" de {bill.issuer}" if bill.issuer not in ["Receita Manual", "Despesa Manual"] else ""
                 date_text = f" com vencimento em {bill.due_date.strftime('%d/%m/%Y')}" if bill.due_date else ""
                 
-                response_text = f"✅ Despesa criada com sucesso!{issuer_text} no valor de R$ {bill.amount:.2f}{date_text}."
+                response_text = f"✅ {transaction_label.capitalize()} criada com sucesso!{issuer_text} no valor de R$ {bill.amount:.2f}{date_text}."
                 
                 if expense_data.get("is_installment"):
                     response_text += f" Esta é a parcela {expense_data.get('installment_current', 1)} de {expense_data.get('installment_total', 1)}."
                 
+                action_name = "income_created" if transaction_type == BillType.INCOME else "expense_created"
+                
                 return ChatResponse(
                     response=response_text,
-                    action="expense_created",
+                    action=action_name,
                     bill_id=str(bill.id)
                 )
                 
             except Exception as e:
-                logger.error(f"Error creating expense from chat: {e}")
+                logger.error(f"Error creating transaction from chat: {e}")
+                transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
                 return ChatResponse(
-                    response=f"Desculpe, ocorreu um erro ao criar a despesa: {str(e)}",
+                    response=f"Desculpe, ocorreu um erro ao criar a {transaction_label}: {str(e)}",
                     action="error"
                 )
         
