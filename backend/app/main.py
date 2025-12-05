@@ -17,6 +17,36 @@ logger = logging.getLogger(__name__)
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+# Executar migrations necessárias
+def run_migrations():
+    """Executa migrations SQL necessárias."""
+    from sqlalchemy import text
+    from app.db.database import engine
+    
+    try:
+        with engine.connect() as conn:
+            # Verificar se a coluna amount ainda tem NOT NULL
+            result = conn.execute(text("""
+                SELECT is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'bills' AND column_name = 'amount'
+            """))
+            row = result.fetchone()
+            
+            if row and row[0] == 'NO':
+                logger.info("Executando migration: tornar amount e due_date nullable")
+                conn.execute(text("ALTER TABLE bills ALTER COLUMN amount DROP NOT NULL"))
+                conn.execute(text("ALTER TABLE bills ALTER COLUMN due_date DROP NOT NULL"))
+                conn.commit()
+                logger.info("Migration executada com sucesso")
+            else:
+                logger.info("Migration já aplicada ou coluna já é nullable")
+    except Exception as e:
+        logger.warning(f"Erro ao executar migration (pode ser que já esteja aplicada): {e}")
+
+# Executar migrations na inicialização
+run_migrations()
+
 app = FastAPI(
     title="EconomizeIA API",
     description="Sistema de organização financeira pessoal",
