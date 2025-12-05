@@ -59,12 +59,16 @@ class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = "economizeia-documents"
     MINIO_USE_SSL: bool = False
     
-    # SMTP (Gmail)
+    # SMTP (Gmail/Outlook)
     SMTP_HOST: str = ""
-    SMTP_PORT: int = 587  # Porta 587 para TLS (Gmail)
+    SMTP_PORT: int = 587  # Porta 587 para TLS
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@economizeia.com"
+    
+    # Brevo (Sendinblue) API - alternativa mais confiável que SMTP
+    BREVO_API_KEY: str = ""  # Se configurado, usa Brevo API ao invés de SMTP
+    BREVO_FROM: str = ""  # Email de envio (pode ser qualquer email verificado)
     
     # SMS (Twilio)
     TWILIO_ACCOUNT_SID: str = ""
@@ -162,6 +166,7 @@ logger.info("=" * 50)
 logger.info("Configurações carregadas:")
 logger.info(f"  DATABASE_URL: {'✅ Configurado' if settings.DATABASE_URL and 'localhost' not in settings.DATABASE_URL else '⚠️ Usando padrão local'}")
 logger.info(f"  REDIS_URL: {'✅ Configurado' if settings.REDIS_URL and 'localhost' not in settings.REDIS_URL else '⚠️ Usando padrão local'}")
+logger.info(f"  BREVO_API_KEY: {'✅ Configurado' if settings.BREVO_API_KEY else '❌ Não configurado (usando SMTP se disponível)'}")
 logger.info(f"  SMTP_HOST: {'✅ Configurado' if settings.SMTP_HOST else '❌ Não configurado'}")
 logger.info(f"  GEMINI_API_KEY: {'✅ Configurado' if settings.GEMINI_API_KEY else '❌ Não configurado'}")
 logger.info(f"  CORS_ORIGINS: {settings.CORS_ORIGINS[:100] if len(settings.CORS_ORIGINS) > 100 else settings.CORS_ORIGINS}")

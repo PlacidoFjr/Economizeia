@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, date
 import uuid
 import os
 from pathlib import Path
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +24,26 @@ class NotificationService:
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
         self.smtp_from = settings.SMTP_FROM
+        
+        # Brevo API (prioridade sobre SMTP)
+        self.brevo_api_key = settings.BREVO_API_KEY
+        self.brevo_from = settings.BREVO_FROM or settings.SMTP_FROM
     
     async def send_email(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
-        """Send email notification via SMTP."""
+        """Send email notification. Uses Brevo API if configured, otherwise falls back to SMTP."""
         
+        # Prioridade 1: Brevo API (mais confiável, funciona melhor em cloud)
+        if self.brevo_api_key:
+            result = await self._send_via_brevo(to, subject, body, html_body)
+            # Se Brevo falhar, tenta SMTP como fallback
+            if not result and self.smtp_host and self.smtp_user and self.smtp_password:
+                logger.info(f"⚠️ Brevo falhou, tentando SMTP como fallback para {to}")
+                return await self._send_via_smtp(to, subject, body, html_body)
+            return result
+        
+        # Prioridade 2: SMTP tradicional
         if not self.smtp_host:
-            logger.warning(f"❌ SMTP not configured (SMTP_HOST missing), skipping email to {to}")
+            logger.warning(f"❌ Email not configured (nem Brevo nem SMTP), skipping email to {to}")
             return False
         
         if not self.smtp_user or not self.smtp_password:
@@ -39,6 +54,60 @@ class NotificationService:
         logger.info(f"📧 SMTP Config: HOST={self.smtp_host}, PORT={self.smtp_port}, USER={self.smtp_user}, FROM={self.smtp_from}")
         
         return await self._send_via_smtp(to, subject, body, html_body)
+    
+    async def _send_via_brevo(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
+        """Send email via Brevo (Sendinblue) API."""
+        try:
+            logger.info(f"📧 Sending email via Brevo API to {to}")
+            
+            # Brevo API endpoint
+            url = "https://api.brevo.com/v3/smtp/email"
+            
+            # Headers
+            headers = {
+                "api-key": self.brevo_api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            
+            # Payload
+            payload = {
+                "sender": {
+                    "name": "EconomizeIA",
+                    "email": self.brevo_from
+                },
+                "to": [{"email": to}],
+                "subject": subject,
+                "textContent": body
+            }
+            
+            # Adicionar HTML se disponível
+            if html_body:
+                payload["htmlContent"] = html_body
+            
+            # Enviar requisição
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code == 201:
+                    response_data = response.json()
+                    message_id = response_data.get("messageId", "unknown")
+                    logger.info(f"✅ Email sent successfully via Brevo to {to} (ID: {message_id})")
+                    return True
+                else:
+                    error_msg = response.text
+                    logger.error(f"❌ Brevo API error ({response.status_code}): {error_msg}")
+                    return False
+                    
+        except httpx.TimeoutException:
+            logger.error(f"❌ Brevo API timeout sending email to {to}")
+            return False
+        except httpx.RequestError as e:
+            logger.error(f"❌ Brevo API request error sending email to {to}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Unexpected error sending email via Brevo to {to}: {e}", exc_info=True)
+            return False
     
     async def _send_via_smtp(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
         """Send email via SMTP."""
