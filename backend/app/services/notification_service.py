@@ -23,63 +23,22 @@ class NotificationService:
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
         self.smtp_from = settings.SMTP_FROM
-        
-        # Resend API (prioridade sobre SMTP)
-        self.resend_api_key = settings.RESEND_API_KEY
-        self.resend_from = settings.RESEND_FROM or "onboarding@resend.dev"
     
     async def send_email(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
-        """Send email notification. Uses Resend API if configured, otherwise falls back to SMTP."""
+        """Send email notification via SMTP."""
         
-        # Prioridade 1: Resend API (mais confiável)
-        if self.resend_api_key:
-            return await self._send_via_resend(to, subject, body, html_body)
-        
-        # Prioridade 2: SMTP tradicional
         if not self.smtp_host:
-            logger.warning(f"❌ Email not configured (nem Resend nem SMTP), skipping email to {to}")
+            logger.warning(f"❌ SMTP not configured (SMTP_HOST missing), skipping email to {to}")
             return False
         
         if not self.smtp_user or not self.smtp_password:
             logger.warning(f"❌ SMTP credentials not configured (USER={bool(self.smtp_user)}, PASSWORD={'*' if self.smtp_password else 'NOT SET'}), skipping email to {to}")
             return False
         
+        # Log configuração para debug
+        logger.info(f"📧 SMTP Config: HOST={self.smtp_host}, PORT={self.smtp_port}, USER={self.smtp_user}, FROM={self.smtp_from}")
+        
         return await self._send_via_smtp(to, subject, body, html_body)
-    
-    async def _send_via_resend(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
-        """Send email via Resend API."""
-        try:
-            import resend
-            
-            resend.api_key = self.resend_api_key
-            
-            logger.info(f"📧 Sending email via Resend API to {to}")
-            
-            params = {
-                "from": self.resend_from,
-                "to": to,
-                "subject": subject,
-                "text": body,
-            }
-            
-            if html_body:
-                params["html"] = html_body
-            
-            response = resend.Emails.send(params)
-            
-            if response and hasattr(response, 'id'):
-                logger.info(f"✅ Email sent successfully via Resend to {to} (ID: {response.id})")
-                return True
-            else:
-                logger.error(f"❌ Resend API returned unexpected response: {response}")
-                return False
-                
-        except ImportError:
-            logger.error("❌ Resend library not installed. Install with: pip install resend")
-            return False
-        except Exception as e:
-            logger.error(f"❌ Error sending email via Resend to {to}: {e}", exc_info=True)
-            return False
     
     async def _send_via_smtp(self, to: str, subject: str, body: str, html_body: Optional[str] = None) -> bool:
         """Send email via SMTP."""
@@ -95,8 +54,12 @@ class NotificationService:
             if html_body:
                 msg.attach(MIMEText(html_body, 'html', 'utf-8'))
             
-            logger.info(f"Connecting to SMTP server {self.smtp_host}:{self.smtp_port}")
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=30) as server:
+            logger.info(f"Connecting to SMTP server {self.smtp_host}:{self.smtp_port} (timeout=60s)")
+            # Aumentar timeout para 60s para dar mais tempo em conexões lentas
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=60) as server:
+                # Habilitar debug se necessário (comentar em produção se muito verboso)
+                # server.set_debuglevel(1)
+                
                 logger.info("Starting TLS...")
                 server.starttls()
                 

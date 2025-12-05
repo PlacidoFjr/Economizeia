@@ -51,8 +51,21 @@ INFO:app.services.notification_service:✅ Email sent successfully via Resend to
 
 O sistema agora:
 1. **Primeiro tenta Resend API** (se `RESEND_API_KEY` estiver configurado)
-2. **Se não tiver Resend**, usa SMTP como fallback
-3. **Resend tem prioridade** - mais confiável!
+2. **Se Resend falhar** (ex: domínio não verificado), **automaticamente tenta SMTP**
+3. **Se não tiver Resend**, usa SMTP como fallback
+4. **Resend tem prioridade** - mais confiável!
+
+## ⚠️ Limitação da Conta de Teste
+
+**Importante:** Com a conta de teste do Resend, você só pode enviar emails para o próprio email cadastrado (`leadspark34@gmail.com`).
+
+**Para enviar para qualquer email:**
+- Verifique um domínio em https://resend.com/domains
+- Ou configure SMTP como fallback (o sistema faz isso automaticamente!)
+
+**Solução Automática:**
+- Se Resend falhar por domínio não verificado, o sistema **automaticamente tenta SMTP**
+- Configure SMTP no Railway para ter fallback automático
 
 ## 🎯 Variáveis Necessárias no Railway
 
