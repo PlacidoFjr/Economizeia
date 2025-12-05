@@ -274,7 +274,7 @@ export default function Dashboard() {
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Painel de Controle</h1>
         {currentUser?.name && (
           <p className="text-base sm:text-lg lg:text-xl font-semibold text-gray-700 mb-1">
-            Bem-vindo, {currentUser.name}! 👋
+            Bem-vindo, {currentUser.name}.
           </p>
         )}
         <p className="text-xs sm:text-sm text-gray-600">Visão geral das suas finanças</p>
