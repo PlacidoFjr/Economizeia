@@ -64,25 +64,41 @@ class Settings(BaseSettings):
     
     def get_cors_origins(self) -> List[str]:
         """Parse CORS_ORIGINS from JSON string or comma-separated string."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == "":
+            logger.warning("CORS_ORIGINS vazio, usando padrão")
             return ["http://localhost:3000", "http://localhost:5173"]
+        
+        logger.info(f"Parsing CORS_ORIGINS: {self.CORS_ORIGINS}")
         
         try:
             # Tentar fazer parse do JSON
             parsed = json.loads(self.CORS_ORIGINS)
             if isinstance(parsed, list):
+                logger.info(f"CORS origins (JSON list): {parsed}")
                 return parsed
             elif isinstance(parsed, str):
                 # Se for string única, retornar como lista
+                logger.info(f"CORS origins (JSON string): [{parsed}]")
                 return [parsed]
-        except (json.JSONDecodeError, ValueError):
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.info(f"JSON parse falhou: {e}, tentando split por vírgula")
             # Se não for JSON, tentar split por vírgula
             try:
                 origins = [origin.strip().strip('"').strip("'") for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
-                return origins if origins else ["http://localhost:3000", "http://localhost:5173"]
-            except:
+                if origins:
+                    logger.info(f"CORS origins (comma-separated): {origins}")
+                    return origins
+                else:
+                    logger.warning("Nenhum origin encontrado após split, usando padrão")
+                    return ["http://localhost:3000", "http://localhost:5173"]
+            except Exception as e2:
+                logger.error(f"Erro ao fazer split: {e2}, usando padrão")
                 return ["http://localhost:3000", "http://localhost:5173"]
         
+        logger.warning("Retornando padrão")
         return ["http://localhost:3000", "http://localhost:5173"]
     
     # Frontend

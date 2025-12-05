@@ -23,12 +23,16 @@ app = FastAPI(
 )
 
 # CORS middleware
+cors_origins = settings.get_cors_origins()
+logger.info(f"CORS origins configurados: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.get_cors_origins(),
+    allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Include routers
@@ -48,6 +52,15 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/api/v1/cors-debug")
+async def cors_debug():
+    """Endpoint de debug para verificar CORS configurado."""
+    return {
+        "cors_origins": settings.get_cors_origins(),
+        "cors_origins_raw": settings.CORS_ORIGINS
+    }
 
 
 @app.exception_handler(Exception)
