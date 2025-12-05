@@ -655,6 +655,10 @@ async def list_bills(
     
     bills = query.order_by(Bill.due_date).all()
     
+    logger.info(f"Listando bills: is_bill={is_bill}, user_id={current_user.id}, total encontrado: {len(bills)}")
+    for bill in bills:
+        logger.debug(f"  - Bill ID: {bill.id}, Type: {bill.type.value if bill.type else 'None'}, Amount: {bill.amount}, IsBill: {bill.is_bill}, Status: {bill.status.value}")
+    
     return [
         {
             "id": str(bill.id),

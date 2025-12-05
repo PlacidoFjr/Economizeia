@@ -47,19 +47,25 @@ async def chat_with_assistant(
         # Primeiro, tentar extrair informações de criação de transação (despesa ou receita)
         expense_data = await ai_service.extract_expense_from_message(chat_data.message)
         
-        # Detectar se é receita ou despesa baseado na mensagem
+        # Detectar se é receita ou despesa baseado na mensagem (mais palavras-chave)
         message_lower = chat_data.message.lower()
         is_income = any(keyword in message_lower for keyword in [
             'receita', 'ganho', 'entrada', 'salário', 'renda', 'adicionar em receita',
-            'adicionar receita', 'criar receita', 'adicionar como receita'
+            'adicionar receita', 'criar receita', 'adicionar como receita', 'sim pode adicionar em receita',
+            'adicionar em receita', 'adicionar como receita', 'receita de', 'ganhei', 'encontrei', 'achei',
+            'achado', 'dinheiro encontrado', 'dinheiro achado'
         ])
         is_expense = any(keyword in message_lower for keyword in [
             'despesa', 'gasto', 'saída', 'boleto', 'conta', 'pagamento', 'adicionar despesa',
-            'criar despesa', 'adicionar gasto'
+            'criar despesa', 'adicionar gasto', 'paguei', 'gastei'
         ])
         
         # Se não detectar explicitamente, assumir despesa (comportamento padrão)
         transaction_type = BillType.INCOME if is_income and not is_expense else BillType.EXPENSE
+        
+        logger.info(f"Chat message: {chat_data.message}")
+        logger.info(f"Expense data extracted: {expense_data}")
+        logger.info(f"Is income: {is_income}, Is expense: {is_expense}, Transaction type: {transaction_type}")
         
         if expense_data and expense_data.get("action") == "create_expense":
             # Criar transação (despesa ou receita)
@@ -109,6 +115,8 @@ async def chat_with_assistant(
                 db.commit()
                 db.refresh(bill)
                 
+                logger.info(f"✅ Transação criada no banco: ID={bill.id}, Type={bill.type.value}, Amount={bill.amount}, IsBill={bill.is_bill}, Status={bill.status.value}")
+                
                 # Preparar resposta
                 transaction_label = "receita" if transaction_type == BillType.INCOME else "despesa"
                 issuer_text = f" de {bill.issuer}" if bill.issuer not in ["Receita Manual", "Despesa Manual"] else ""
@@ -120,6 +128,8 @@ async def chat_with_assistant(
                     response_text += f" Esta é a parcela {expense_data.get('installment_current', 1)} de {expense_data.get('installment_total', 1)}."
                 
                 action_name = "income_created" if transaction_type == BillType.INCOME else "expense_created"
+                
+                logger.info(f"Retornando action: {action_name}, bill_id: {bill.id}")
                 
                 return ChatResponse(
                     response=response_text,
