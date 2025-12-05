@@ -1279,6 +1279,45 @@ Equipe EconomizeIA
         balance_icon = "📈" if balance >= 0 else "📉"
         balance_text = "Superávit" if balance >= 0 else "Déficit"
         
+        # Build categories HTML
+        categories_html = ""
+        if top_categories:
+            for i, cat in enumerate(top_categories[:5]):
+                margin_bottom = "16px" if i < len(top_categories) - 1 else "0px"
+                width_percent = min(100, (cat.get("total", 0) / total_expenses * 100) if total_expenses > 0 else 0)
+                categories_html += f'''
+                                        <div style="margin-bottom: {margin_bottom};">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #374151; font-size: 15px; font-weight: 600;">{cat.get("name", "Sem categoria")}</span>
+                                                <span style="color: #111827; font-size: 16px; font-weight: 700;">R$ {cat.get("total", 0):,.2f}</span>
+                                            </div>
+                                            <div style="background-color: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%); height: 100%; width: {width_percent:.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                        </div>
+                                        '''
+        
+        # Build savings goals HTML
+        savings_goals_html = ""
+        if savings_goals_progress:
+            for i, goal in enumerate(savings_goals_progress[:3]):
+                margin_bottom = "24px" if i < len(savings_goals_progress) - 1 else "0px"
+                progress = min(100, goal.get("progress", 0))
+                savings_goals_html += f'''
+                                        <div style="margin-bottom: {margin_bottom};">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #0c4a6e; font-size: 15px; font-weight: 600;">{goal.get("name", "Meta")}</span>
+                                                <span style="color: #0369a1; font-size: 14px; font-weight: 600;">{goal.get("progress", 0):.1f}%</span>
+                                            </div>
+                                            <div style="background-color: #e0f2fe; border-radius: 4px; height: 10px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, #0284c7 0%, #0ea5e9 100%); height: 100%; width: {progress:.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                            <p style="margin: 8px 0 0 0; color: #075985; font-size: 13px;">
+                                                R$ {goal.get("current", 0):,.2f} / R$ {goal.get("target", 0):,.2f}
+                                            </p>
+                                        </div>
+                                        '''
+        
         html_body = f"""
         <!DOCTYPE html>
         <html lang="pt-BR">
@@ -1420,17 +1459,7 @@ Equipe EconomizeIA
                                         🏆 Top Categorias de Gastos
                                     </h3>
                                     <div style="background-color: #f9fafb; border-radius: 10px; padding: 24px;">
-                                        {"".join([f'''
-                                        <div style="margin-bottom: {"16px" if i < len(top_categories) - 1 else "0"};">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                                <span style="color: #374151; font-size: 15px; font-weight: 600;">{cat.get("name", "Sem categoria")}</span>
-                                                <span style="color: #111827; font-size: 16px; font-weight: 700;">R$ {cat.get("total", 0):,.2f}</span>
-                                            </div>
-                                            <div style="background-color: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
-                                                <div style="background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%); height: 100%; width: {min(100, (cat.get("total", 0) / total_expenses * 100) if total_expenses > 0 else 0):.1f}%; border-radius: 4px;"></div>
-                                            </div>
-                                        </div>
-                                        ''' for i, cat in enumerate(top_categories[:5])])}
+                                        {categories_html}
                                     </div>
                                 </td>
                             </tr>
@@ -1444,20 +1473,7 @@ Equipe EconomizeIA
                                         🎯 Metas de Economia
                                     </h3>
                                     <div style="background-color: #f0f9ff; border-radius: 10px; padding: 24px; border: 1px solid #bae6fd;">
-                                        {"".join([f'''
-                                        <div style="margin-bottom: {"24px" if i < len(savings_goals_progress) - 1 else "0"};">
-                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                                                <span style="color: #0c4a6e; font-size: 15px; font-weight: 600;">{goal.get("name", "Meta")}</span>
-                                                <span style="color: #0369a1; font-size: 14px; font-weight: 600;">{goal.get("progress", 0):.1f}%</span>
-                                            </div>
-                                            <div style="background-color: #e0f2fe; border-radius: 4px; height: 10px; overflow: hidden;">
-                                                <div style="background: linear-gradient(90deg, #0284c7 0%, #0ea5e9 100%); height: 100%; width: {min(100, goal.get("progress", 0)):.1f}%; border-radius: 4px;"></div>
-                                            </div>
-                                            <p style="margin: 8px 0 0 0; color: #075985; font-size: 13px;">
-                                                R$ {goal.get("current", 0):,.2f} / R$ {goal.get("target", 0):,.2f}
-                                            </p>
-                                        </div>
-                                        ''' for i, goal in enumerate(savings_goals_progress[:3])])}
+                                        {savings_goals_html}
                                     </div>
                                 </td>
                             </tr>
