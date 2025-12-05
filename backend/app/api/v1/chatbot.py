@@ -108,7 +108,16 @@ async def chat_with_assistant(
         # Se detectar confirmação simples ("sim", "pode", "confirma") e houver transação pendente
         is_confirmation = any(word in message_lower for word in ['sim', 'pode', 'confirma', 'ok', 'tudo bem', 'pode adicionar', 'adiciona', 'coloca', 'põe'])
         
-        if (expense_data and expense_data.get("action") == "create_expense") or (is_confirmation and has_pending_transaction and pending_amount):
+        # Verificar se é comando de criação (despesa ou receita)
+        is_create_command = expense_data and expense_data.get("action") in ["create_expense", "create_income"]
+        
+        # Se o prompt retornou create_income, forçar tipo como INCOME
+        if expense_data and expense_data.get("action") == "create_income":
+            transaction_type = BillType.INCOME
+            is_income = True
+            is_expense = False
+        
+        if is_create_command or (is_confirmation and has_pending_transaction and pending_amount):
             # Criar transação (despesa ou receita)
             try:
                 # Usar valor do expense_data ou do histórico
