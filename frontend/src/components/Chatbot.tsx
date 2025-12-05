@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { MessageCircle, X, Send, Bot, User, Trash2 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 
 interface Message {
@@ -55,6 +56,7 @@ const saveMessages = (messages: Message[]) => {
 }
 
 export default function Chatbot() {
+  const queryClient = useQueryClient()
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>(loadMessages)
   const [inputText, setInputText] = useState('')
@@ -126,12 +128,13 @@ export default function Chatbot() {
       setMessages((prev) => [...prev, botMessage])
       setIsLoading(false)
 
-      // Se uma despesa foi criada, atualizar a lista de boletos
-      if (response.data.action === 'expense_created') {
-        // Invalidar queries para atualizar dados
-        setTimeout(() => {
-          window.location.reload()
-        }, 1500)
+      // Se uma transação foi criada (despesa ou receita), invalidar queries para atualizar o dashboard
+      if (response.data.action === 'expense_created' || response.data.action === 'income_created') {
+        // Invalidar queries para atualizar dados sem recarregar a página
+        queryClient.invalidateQueries({ queryKey: ['bills'] })
+        queryClient.invalidateQueries({ queryKey: ['finances'] })
+        // Também invalidar qualquer query relacionada ao dashboard
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       }
     } catch (error: any) {
       console.error('Erro ao chamar chatbot:', error)
