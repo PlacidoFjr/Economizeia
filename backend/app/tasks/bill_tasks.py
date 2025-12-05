@@ -48,31 +48,58 @@ def process_bill_upload(bill_id: str, document_id: str):
         # Get presigned URL for image (if needed by Ollama)
         image_url = storage_service.get_presigned_url(object_name, expires_seconds=3600)
         
-        # Extract structured data with Ollama (prioridade) ou Gemini
-        logger.info(f"Starting AI extraction for bill {bill_id}")
-        import asyncio
-        from app.services.gemini_service import get_gemini_service
+        # Extrair campos: primeiro regex (rápido), depois AI se necessário
+        logger.info(f"Starting field extraction for bill {bill_id}")
         
-        # Priorizar Ollama, usar Gemini apenas se Ollama não estiver disponível
-        try:
-            ai_service = ollama_service
-            logger.info(f"Usando Ollama para extração de campos do boleto {bill_id}")
-        except:
-            gemini_service = get_gemini_service()
-            if gemini_service:
-                ai_service = gemini_service
-                logger.info(f"Ollama não disponível, usando Gemini para extração de campos do boleto {bill_id}")
+        # PRIMEIRO: Tentar extração com regex específico para boletos brasileiros
+        from app.services.bill_extractor import brazilian_bill_extractor
+        regex_extracted = brazilian_bill_extractor.extract_fields(ocr_text)
+        
+        # Se regex extraiu com boa confiança, usar diretamente
+        if regex_extracted.get("confidence", 0.0) >= 0.80:
+            logger.info(f"Extraction via regex bem-sucedida (confiança: {regex_extracted['confidence']:.2f})")
+            extracted = regex_extracted
+        else:
+            # Se regex não foi suficiente, usar AI como fallback
+            logger.info(f"Regex extraiu com confiança baixa ({regex_extracted.get('confidence', 0):.2f}), tentando AI...")
+            import asyncio
+            from app.services.gemini_service import get_gemini_service
+            
+            try:
+                ai_service = ollama_service
+                logger.info(f"Usando Ollama para extração de campos do boleto {bill_id}")
+            except:
+                gemini_service = get_gemini_service()
+                if gemini_service:
+                    ai_service = gemini_service
+                    logger.info(f"Ollama não disponível, usando Gemini para extração de campos do boleto {bill_id}")
+                else:
+                    logger.warning(f"Nenhum serviço de IA disponível, usando resultado do regex")
+                    extracted = regex_extracted
+                    ai_service = None
+            
+            if ai_service:
+                ai_extracted = asyncio.run(
+                    ai_service.extract_bill_fields(
+                        ocr_text=ocr_text,
+                        image_url=image_url,
+                        metadata={"filename": document.s3_path}
+                    )
+                )
+                
+                # Combinar resultados: preferir regex para campos essenciais
+                extracted = {
+                    "issuer": regex_extracted.get("issuer") or ai_extracted.get("issuer"),
+                    "amount": regex_extracted.get("amount") or ai_extracted.get("amount"),
+                    "currency": "BRL",
+                    "due_date": regex_extracted.get("due_date") or ai_extracted.get("due_date"),
+                    "barcode": regex_extracted.get("barcode") or ai_extracted.get("barcode"),
+                    "payment_place": None,
+                    "confidence": max(regex_extracted.get("confidence", 0.0), ai_extracted.get("confidence", 0.0)),
+                    "notes": ai_extracted.get("notes", "")
+                }
             else:
-                logger.error(f"Nenhum serviço de IA disponível para extração de campos")
-                raise Exception("Nenhum serviço de IA disponível")
-        
-        extracted = asyncio.run(
-            ai_service.extract_bill_fields(
-                ocr_text=ocr_text,
-                image_url=image_url,
-                metadata={"filename": document.s3_path}
-            )
-        )
+                extracted = regex_extracted
         
         document.extracted_json = extracted
         
