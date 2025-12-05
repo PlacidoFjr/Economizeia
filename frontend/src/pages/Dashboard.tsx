@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '../services/api'
-import { AlertCircle, DollarSign, FileText, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
+import { AlertCircle, DollarSign, FileText, ArrowUpCircle, ArrowDownCircle, TrendingUp } from 'lucide-react'
 import { translateStatus } from '../utils/translations'
 import { 
   BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 
 // Cores para os gráficos (categorias e emissores)
@@ -28,13 +28,18 @@ export default function Dashboard() {
     },
   })
 
-  // const { data: payments } = useQuery({
-  //   queryKey: ['payments'],
-  //   queryFn: async () => {
-  //     const response = await api.get('/payments')
-  //     return response.data
-  //   },
-  // })
+  const { data: investments } = useQuery({
+    queryKey: ['investments'],
+    queryFn: async () => {
+      try {
+        const response = await api.get('/investments')
+        return response.data || []
+      } catch (error) {
+        console.error('Erro ao buscar investimentos:', error)
+        return []
+      }
+    },
+  })
 
   // Processamento de dados
   const now = new Date()
@@ -139,8 +144,48 @@ export default function Dashboard() {
       year: date.getFullYear(),
       despesas: expenses,
       receitas: income,
+      saldo: income - expenses,
     })
   }
+
+  // Processar dados de investimentos
+  const totalInvested = investments?.reduce((sum: number, inv: any) => sum + (inv.amount_invested || 0), 0) || 0
+  const totalCurrentValue = investments?.reduce((sum: number, inv: any) => sum + ((inv.current_value || inv.amount_invested) || 0), 0) || 0
+  const totalProfitLoss = totalCurrentValue - totalInvested
+  const totalProfitLossPercent = totalInvested > 0 ? ((totalProfitLoss / totalInvested) * 100) : 0
+
+  // Agrupar investimentos por tipo
+  const typeLabels: { [key: string]: string } = {
+    stock: 'Ações',
+    fixed_income: 'Renda Fixa',
+    fund: 'Fundos',
+    crypto: 'Criptomoedas',
+    real_estate: 'Imóveis',
+    other: 'Outros'
+  }
+  
+  const investmentTypeData = (investments || []).reduce((acc: any, inv: any) => {
+    const type = inv.type || 'other'
+    const typeLabel = typeLabels[type] || 'Outros'
+    
+    if (!acc[type]) {
+      acc[type] = { name: typeLabel, value: 0, count: 0, invested: 0, current: 0 }
+    }
+    acc[type].value += inv.current_value || inv.amount_invested || 0
+    acc[type].invested += inv.amount_invested || 0
+    acc[type].current += inv.current_value || inv.amount_invested || 0
+    acc[type].count += 1
+    return acc
+  }, {})
+
+  const investmentTypeChartData = Object.values(investmentTypeData)
+    .map((inv: any, index: number) => ({
+      ...inv,
+      color: COLORS[index % COLORS.length],
+      profit: inv.current - inv.invested,
+      profitPercent: inv.invested > 0 ? ((inv.current - inv.invested) / inv.invested * 100) : 0
+    }))
+    .sort((a: any, b: any) => b.value - a.value)
 
   // Dados para gráfico de receitas vs despesas
   const incomeVsExpenses = [
@@ -234,26 +279,38 @@ export default function Dashboard() {
       {/* Gráficos Principais */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Receitas vs Despesas */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
             Receitas vs Despesas (Mês Atual)
           </h3>
-          <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
-            <BarChart data={incomeVsExpenses}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="name" stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} />
+          <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+            <BarChart data={incomeVsExpenses} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+              <XAxis 
+                dataKey="name" 
+                stroke="#6b7280" 
+                fontSize={12}
+                tick={{ fill: '#6b7280' }}
+              />
+              <YAxis 
+                stroke="#6b7280" 
+                fontSize={11}
+                tick={{ fill: '#6b7280' }}
+                tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+              />
               <Tooltip 
-                formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                formatter={(value: number) => [`R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 'Valor']}
                 contentStyle={{ 
                   backgroundColor: 'white', 
                   border: '1px solid #e5e7eb', 
-                  borderRadius: '6px',
-                  padding: '8px',
-                  fontSize: '12px'
+                  borderRadius: '8px',
+                  padding: '10px',
+                  fontSize: '13px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }} 
+                cursor={{ fill: 'rgba(0,0,0,0.05)' }}
               />
-              <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="valor" radius={[8, 8, 0, 0]} barSize={60}>
                 {incomeVsExpenses.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
@@ -263,13 +320,13 @@ export default function Dashboard() {
         </div>
 
         {/* Distribuição por Categoria */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-900 mb-4">
             Gastos por Categoria
           </h3>
           {categoryChartData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
+              <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
                 <PieChart>
                   <Pie
                     data={categoryChartData}
@@ -279,109 +336,291 @@ export default function Dashboard() {
                     label={(props: any) => {
                       if (!props || !props.name) return '';
                       const percent = props.percent || 0;
-                      return `${props.name} ${(percent * 100).toFixed(0)}%`;
+                      if (percent < 0.05) return ''; // Não mostrar labels muito pequenos
+                      return `${(percent * 100).toFixed(0)}%`;
                     }}
-                    outerRadius={80}
+                    outerRadius={90}
+                    innerRadius={40}
                     fill="#8884d8"
                     dataKey="value"
+                    paddingAngle={2}
                   >
                     {categoryChartData.map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={2} />
                     ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                    formatter={(value: number, _name: string, props: any) => [
+                      `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                      props.payload.name
+                    ]}
                     contentStyle={{ 
                       backgroundColor: 'white', 
                       border: '1px solid #e5e7eb', 
                       borderRadius: '8px',
-                      padding: '10px'
+                      padding: '10px',
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                     }} 
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="mt-4 grid grid-cols-2 gap-3">
                 {categoryChartData.slice(0, 4).map((cat: any, index: number) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }}></div>
-                    <span className="text-sm text-gray-700 font-medium">{cat.name}</span>
-                    <span className="text-sm text-gray-600">R$ {cat.value.toFixed(2)}</span>
+                  <div key={index} className="flex items-center space-x-2 p-2 bg-gray-50 rounded">
+                    <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }}></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-900 truncate">{cat.name}</p>
+                      <p className="text-xs text-gray-600">R$ {cat.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-gray-500">
-              <p>Nenhum dado de categoria disponível</p>
+            <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
+              <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mb-3">
+                <FileText className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-sm">Nenhum dado de categoria disponível</p>
             </div>
           )}
         </div>
       </div>
 
+      {/* Gráficos de Investimentos */}
+      {investments && investments.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+          {/* Distribuição de Investimentos por Tipo */}
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
+                Investimentos por Tipo
+              </h3>
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+            </div>
+            {investmentTypeChartData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+                  <PieChart>
+                    <Pie
+                      data={investmentTypeChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={(props: any) => {
+                        if (!props || !props.name) return '';
+                        const percent = props.percent || 0;
+                        if (percent < 0.05) return '';
+                        return `${(percent * 100).toFixed(0)}%`;
+                      }}
+                      outerRadius={90}
+                      innerRadius={40}
+                      fill="#8884d8"
+                      dataKey="value"
+                      paddingAngle={2}
+                    >
+                      {investmentTypeChartData.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} stroke="#fff" strokeWidth={2} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      formatter={(value: number, _name: string, props: any) => [
+                        `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                        props.payload.name
+                      ]}
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e5e7eb', 
+                        borderRadius: '8px',
+                        padding: '10px',
+                        boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                      }} 
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="mt-4 space-y-2">
+                  {investmentTypeChartData.slice(0, 5).map((inv: any, index: number) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div className="flex items-center space-x-2 flex-1 min-w-0">
+                        <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: inv.color }}></div>
+                        <span className="text-xs font-semibold text-gray-900 truncate">{inv.name}</span>
+                      </div>
+                      <div className="text-right ml-2">
+                        <p className="text-xs font-semibold text-gray-900">
+                          R$ {inv.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <p className={`text-xs ${inv.profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {inv.profit >= 0 ? '+' : ''}{inv.profitPercent.toFixed(1)}%
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
+                <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mb-3">
+                  <TrendingUp className="w-8 h-8 text-gray-400" />
+                </div>
+                <p className="text-sm">Nenhum investimento cadastrado</p>
+              </div>
+            )}
+          </div>
+
+          {/* Resumo de Investimentos */}
+          <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
+            <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
+              Resumo de Investimentos
+            </h3>
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-xs font-medium text-blue-700 mb-1">Total Investido</p>
+                <p className="text-2xl font-bold text-blue-900">
+                  R$ {totalInvested.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <p className="text-xs font-medium text-gray-700 mb-1">Valor Atual</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  R$ {totalCurrentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className={`border rounded-lg p-4 ${totalProfitLoss >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                <p className="text-xs font-medium mb-1" style={{ color: totalProfitLoss >= 0 ? '#065f46' : '#991b1b' }}>
+                  {totalProfitLoss >= 0 ? 'Lucro' : 'Prejuízo'}
+                </p>
+                <div className="flex items-baseline space-x-2">
+                  <p className={`text-2xl font-bold ${totalProfitLoss >= 0 ? 'text-green-900' : 'text-red-900'}`}>
+                    {totalProfitLoss >= 0 ? '+' : ''}R$ {Math.abs(totalProfitLoss).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className={`text-sm font-semibold ${totalProfitLoss >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    ({totalProfitLossPercent >= 0 ? '+' : ''}{totalProfitLossPercent.toFixed(2)}%)
+                  </p>
+                </div>
+              </div>
+              <div className="pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-600 mb-2">Total de Investimentos:</p>
+                <p className="text-lg font-bold text-gray-900">{investments.length}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Gráficos Secundários */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-        {/* Evolução Mensal */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+        {/* Evolução Mensal - Receitas e Despesas */}
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
-            Evolução de Despesas (Últimos 6 Meses)
+            Evolução Financeira (Últimos 6 Meses)
           </h3>
-          <ResponsiveContainer width="100%" height={200} className="sm:h-[250px]">
-            <AreaChart data={monthlyData}>
+          <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+            <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
+                <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
+                </linearGradient>
                 <linearGradient id="colorDespesas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0.05}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="name" stroke="#6b7280" fontSize={11} />
-              <YAxis stroke="#6b7280" fontSize={11} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+              <XAxis 
+                dataKey="name" 
+                stroke="#6b7280" 
+                fontSize={11}
+                tick={{ fill: '#6b7280' }}
+              />
+              <YAxis 
+                stroke="#6b7280" 
+                fontSize={11}
+                tick={{ fill: '#6b7280' }}
+                tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+              />
               <Tooltip 
-                formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                formatter={(value: number, name: string) => [
+                  `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                  name === 'receitas' ? 'Receitas' : name === 'despesas' ? 'Despesas' : 'Saldo'
+                ]}
+                labelFormatter={(label: string) => label}
                 contentStyle={{ 
                   backgroundColor: 'white', 
                   border: '1px solid #e5e7eb', 
-                  borderRadius: '6px',
-                  padding: '8px',
-                  fontSize: '12px'
+                  borderRadius: '8px',
+                  padding: '10px',
+                  fontSize: '13px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                 }} 
+              />
+              <Legend 
+                formatter={(value) => value === 'receitas' ? 'Receitas' : value === 'despesas' ? 'Despesas' : 'Saldo'}
+                iconType="circle"
+                wrapperStyle={{ paddingTop: '10px' }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="receitas" 
+                stroke="#10b981" 
+                strokeWidth={2.5}
+                fillOpacity={1} 
+                fill="url(#colorReceitas)"
+                name="receitas"
               />
               <Area 
                 type="monotone" 
                 dataKey="despesas" 
                 stroke="#ef4444" 
-                strokeWidth={2}
+                strokeWidth={2.5}
                 fillOpacity={1} 
-                fill="url(#colorDespesas)" 
+                fill="url(#colorDespesas)"
+                name="despesas"
               />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Top Emissores */}
-        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
             Top Emissores (Gastos)
           </h3>
           {issuerChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200} className="sm:h-[300px]">
-              <BarChart data={issuerChartData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" stroke="#6b7280" />
-                <YAxis dataKey="name" type="category" stroke="#6b7280" width={100} />
+            <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+              <BarChart data={issuerChartData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
+                <XAxis 
+                  type="number" 
+                  stroke="#6b7280" 
+                  fontSize={11}
+                  tick={{ fill: '#6b7280' }}
+                  tickFormatter={(value) => `R$ ${(value / 1000).toFixed(0)}k`}
+                />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  stroke="#6b7280" 
+                  width={100}
+                  fontSize={11}
+                  tick={{ fill: '#6b7280' }}
+                />
                 <Tooltip 
                   formatter={(value: number, name: string, props: any) => [
-                    `R$ ${value.toFixed(2)}`,
+                    `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
                     props.payload.fullName || name
                   ]}
                   contentStyle={{ 
                     backgroundColor: 'white', 
                     border: '1px solid #e5e7eb', 
                     borderRadius: '8px',
-                    padding: '10px'
+                    padding: '10px',
+                    fontSize: '13px',
+                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
                   }} 
+                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
                 />
-                <Bar dataKey="value" radius={[0, 8, 8, 0]}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={35}>
                   {issuerChartData.map((entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
@@ -389,8 +628,11 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-[300px] text-gray-500">
-              <p>Nenhum dado de emissor disponível</p>
+            <div className="flex flex-col items-center justify-center h-[300px] text-gray-500">
+              <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mb-3">
+                <FileText className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-sm">Nenhum dado de emissor disponível</p>
             </div>
           )}
         </div>
