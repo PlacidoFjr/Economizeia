@@ -214,6 +214,93 @@ Se NÃO for comando:
         except Exception as e:
             logger.error(f"Erro ao extrair despesa com Gemini: {e}", exc_info=True)
             return {"action": "chat"}
+    
+    async def extract_bill_fields(self, ocr_text: str, image_url: Optional[str] = None, 
+                                  metadata: Optional[Dict] = None) -> Dict[str, Any]:
+        """
+        Extract structured fields from OCR text using Gemini.
+        Returns extracted fields with confidence score.
+        """
+        system_prompt = """Você é um extrator de campos de documentos financeiros. Receberá linhas de OCR e opcionalmente a URL da imagem. Deve retornar apenas JSON estrito conforme o schema.
+
+Task: Extraia e normalize os campos:
+{
+  "issuer": "string or null",
+  "amount": "decimal or null",
+  "currency": "BRL",
+  "due_date": "YYYY-MM-DD or null",
+  "barcode": "string or null",
+  "payment_place": "string or null",
+  "confidence": 0.0-1.0,
+  "notes": "string"
+}
+
+Rules:
+1. Datas em ISO (YYYY-MM-DD).
+2. Valores numéricos com duas casas decimais.
+3. Se algum campo foi inferido, reduzir confidence < 0.9 e documentar em notes.
+4. Corrija erros óbvios do OCR (ex: R0$ -> R$, 0 -> O quando apropriado).
+5. Responder somente JSON válido, sem markdown, sem texto adicional."""
+        
+        user_prompt = f"""Extraia os campos do documento financeiro abaixo:
+
+OCR Text:
+{ocr_text[:2000]}
+
+Metadata: {json.dumps(metadata or {})}"""
+        
+        try:
+            response = self.model.generate_content(
+                f"{system_prompt}\n\n{user_prompt}"
+            )
+            
+            response_text = response.text.strip()
+            
+            # Try to parse JSON (might be wrapped in markdown)
+            try:
+                # Remove markdown code blocks if present
+                if "```json" in response_text:
+                    response_text = response_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in response_text:
+                    response_text = response_text.split("```")[1].split("```")[0].strip()
+                
+                extracted = json.loads(response_text)
+                
+                # Validate and normalize
+                if "confidence" not in extracted:
+                    extracted["confidence"] = 0.7
+                
+                if "currency" not in extracted:
+                    extracted["currency"] = "BRL"
+                
+                return extracted
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse Gemini JSON response: {e}")
+                logger.error(f"Response was: {response_text[:500]}")
+                return {
+                    "issuer": None,
+                    "amount": None,
+                    "currency": "BRL",
+                    "due_date": None,
+                    "barcode": None,
+                    "payment_place": None,
+                    "confidence": 0.3,
+                    "notes": f"Erro ao processar resposta: {str(e)}"
+                }
+                
+        except Exception as e:
+            logger.error(f"Erro ao extrair campos com Gemini: {e}", exc_info=True)
+            return {
+                "issuer": None,
+                "amount": None,
+                "currency": "BRL",
+                "due_date": None,
+                "barcode": None,
+                "payment_place": None,
+                "confidence": 0.0,
+                "notes": f"Erro ao processar: {str(e)}"
+            }
 
 
 # Instância global do serviço
