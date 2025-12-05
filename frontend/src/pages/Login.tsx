@@ -43,7 +43,7 @@ export default function Login() {
     try {
       await login(email, password)
       showToast('Login realizado com sucesso!', 'success')
-      navigate('/dashboard')
+      navigate('/app/dashboard')
     } catch (err: any) {
       const errorDetail = err.response?.data?.detail || 'Erro ao fazer login'
       // Se o erro for sobre email não verificado, mostrar mensagem mais clara

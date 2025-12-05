@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider } from './contexts/AuthContext'
 import ToastContainer from './components/ToastContainer'
+import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import ForgotPassword from './pages/ForgotPassword'
@@ -17,6 +18,8 @@ import BillDetail from './pages/BillDetail'
 import Payments from './pages/Payments'
 import Installments from './pages/Installments'
 import AddExpense from './pages/AddExpense'
+import SavingsGoals from './pages/SavingsGoals'
+import Investments from './pages/Investments'
 import ProtectedRoute from './components/ProtectedRoute'
 import Layout from './components/Layout'
 
@@ -29,6 +32,7 @@ function App() {
         <AuthProvider>
           <BrowserRouter>
           <Routes>
+            <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -37,14 +41,14 @@ function App() {
             <Route path="/termos" element={<TermosUso />} />
             <Route path="/privacidade" element={<Privacidade />} />
             <Route
-              path="/"
+              path="/app"
               element={
                 <ProtectedRoute>
                   <Layout />
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route index element={<Navigate to="/app/dashboard" replace />} />
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="bills" element={<Bills />} />
               <Route path="bills/upload" element={<BillUpload />} />
@@ -53,7 +57,11 @@ function App() {
               <Route path="finances" element={<Finances />} />
               <Route path="payments" element={<Payments />} />
               <Route path="installments" element={<Installments />} />
+              <Route path="savings-goals" element={<SavingsGoals />} />
+              <Route path="investments" element={<Investments />} />
             </Route>
+            {/* Redirect antigo /dashboard para /app/dashboard */}
+            <Route path="/dashboard" element={<Navigate to="/app/dashboard" replace />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

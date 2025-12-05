@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Outlet, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Home, FileText, Upload, LogOut, Calendar, CreditCard, Menu, X, DollarSign } from 'lucide-react'
+import { Home, FileText, Upload, LogOut, Calendar, CreditCard, Menu, X, DollarSign, Target, TrendingUp } from 'lucide-react'
 import Chatbot from './Chatbot'
 
 export default function Layout() {
@@ -15,12 +15,14 @@ export default function Layout() {
   }
 
   const menuItems = [
-    { to: '/dashboard', icon: Home, label: 'Painel' },
-    { to: '/bills', icon: FileText, label: 'Boletos' },
-    { to: '/finances', icon: DollarSign, label: 'Finanças' },
-    { to: '/bills/add', icon: Upload, label: 'Adicionar' },
-    { to: '/payments', icon: Calendar, label: 'Pagamentos' },
-    { to: '/installments', icon: CreditCard, label: 'Parcelados' },
+    { to: '/app/dashboard', icon: Home, label: 'Painel' },
+    { to: '/app/bills', icon: FileText, label: 'Boletos' },
+    { to: '/app/finances', icon: DollarSign, label: 'Finanças' },
+    { to: '/app/bills/add', icon: Upload, label: 'Adicionar' },
+    { to: '/app/payments', icon: Calendar, label: 'Pagamentos' },
+    { to: '/app/installments', icon: CreditCard, label: 'Parcelados' },
+    { to: '/app/savings-goals', icon: Target, label: 'Metas' },
+    { to: '/app/investments', icon: TrendingUp, label: 'Investimentos' },
   ]
 
   return (
@@ -30,7 +32,7 @@ export default function Layout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link to="/dashboard" className="flex items-center px-2 sm:px-4 text-lg sm:text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
+              <Link to="/app/dashboard" className="flex items-center px-2 sm:px-4 text-lg sm:text-xl font-bold text-gray-900 hover:text-gray-700 transition-colors">
                 <span className="text-gray-900">Economize</span>
                 <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">IA</span>
               </Link>

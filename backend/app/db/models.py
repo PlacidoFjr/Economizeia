@@ -48,6 +48,8 @@ class NotificationType(str, enum.Enum):
     PAYMENT_CONFIRMED = "payment_confirmed"
     RECONCILIATION = "reconciliation"
     ANOMALY = "anomaly"
+    SAVINGS_GOAL_REMINDER = "savings_goal_reminder"
+    SAVINGS_GOAL_DEADLINE = "savings_goal_deadline"
 
 
 class User(Base):
@@ -78,6 +80,8 @@ class User(Base):
     bills = relationship("Bill", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    savings_goals = relationship("SavingsGoal", back_populates="user", cascade="all, delete-orphan")
+    investments = relationship("Investment", back_populates="user", cascade="all, delete-orphan")
 
 
 class Account(Base):
@@ -163,6 +167,61 @@ class Notification(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="notifications")
+
+
+class SavingsGoalStatus(str, enum.Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+class InvestmentType(str, enum.Enum):
+    STOCK = "stock"  # Ações
+    FIXED_INCOME = "fixed_income"  # Renda Fixa
+    FUND = "fund"  # Fundos
+    CRYPTO = "crypto"  # Criptomoedas
+    REAL_ESTATE = "real_estate"  # Imóveis
+    OTHER = "other"  # Outros
+
+
+class SavingsGoal(Base):
+    __tablename__ = "savings_goals"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)  # Nome da meta (ex: "Viagem para Europa")
+    target_amount = Column(Float, nullable=False)  # Valor que quer guardar
+    current_amount = Column(Float, default=0.0)  # Valor já guardado
+    deadline = Column(Date, nullable=False)  # Data limite
+    description = Column(Text, nullable=True)  # Descrição opcional
+    status = Column(Enum(SavingsGoalStatus), default=SavingsGoalStatus.ACTIVE)
+    notify_days_before = Column(JSONB, default=[30, 15, 7, 3, 1])  # Dias antes para avisar
+    last_notification_sent = Column(Date, nullable=True)  # Última notificação enviada
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="savings_goals")
+
+
+class Investment(Base):
+    __tablename__ = "investments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)  # Nome do investimento
+    type = Column(Enum(InvestmentType), nullable=False)
+    amount_invested = Column(Float, nullable=False)  # Valor investido
+    current_value = Column(Float, nullable=True)  # Valor atual (pode ser atualizado)
+    purchase_date = Column(Date, nullable=False)  # Data da compra
+    sell_date = Column(Date, nullable=True)  # Data da venda (se vendido)
+    institution = Column(String(255), nullable=True)  # Corretora/Banco
+    ticker = Column(String(50), nullable=True)  # Código (ex: PETR4, BTC)
+    notes = Column(Text, nullable=True)  # Observações
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="investments")
 
 
 class AuditLog(Base):

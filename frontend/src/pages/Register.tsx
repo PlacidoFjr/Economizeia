@@ -54,12 +54,23 @@ export default function Register() {
         showToast('Conta criada! Verifique seu email para confirmar.', 'success', 8000)
       } else {
         showToast('Registro realizado com sucesso!', 'success')
-        navigate('/dashboard')
+        navigate('/app/dashboard')
       }
     } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || 'Erro ao registrar'
+      let errorMsg = 'Erro ao registrar'
+      
+      if (err.message) {
+        // Erro de conexão/timeout
+        errorMsg = err.message
+      } else if (err.response?.data?.detail) {
+        // Erro do backend
+        errorMsg = err.response.data.detail
+      }
+      
       if (errorMsg.includes('já cadastrado') || errorMsg.includes('já existe')) {
         showToast('Este email já está cadastrado. Tente fazer login.', 'error', 6000)
+      } else if (errorMsg.includes('conectar') || errorMsg.includes('timeout') || errorMsg.includes('API não configurada')) {
+        showToast('Erro de conexão. Verifique se o backend está configurado corretamente.', 'error', 8000)
       } else {
         showToast(errorMsg, 'error', 5000)
       }

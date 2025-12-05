@@ -1,7 +1,7 @@
 from celery import shared_task
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
-from app.db.models import User, Bill, BillStatus, BillType
+from app.db.models import User, Bill, BillStatus, BillType, SavingsGoal, SavingsGoalStatus, Notification, NotificationType
 from app.services.notification_service import notification_service
 import logging
 from uuid import UUID
@@ -182,6 +182,109 @@ def check_upcoming_payments():
                 
     except Exception as e:
         logger.error(f"Error in check_upcoming_payments: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
+@shared_task(name="check_savings_goals_reminders")
+def check_savings_goals_reminders():
+    """Check all users for savings goals reminders (runs daily)."""
+    db: Session = SessionLocal()
+    
+    try:
+        users = db.query(User).filter(User.is_active == True, User.email_verified == True).all()
+        today = date.today()
+        
+        for user in users:
+            try:
+                # Get active savings goals
+                active_goals = db.query(SavingsGoal).filter(
+                    SavingsGoal.user_id == user.id,
+                    SavingsGoal.status == SavingsGoalStatus.ACTIVE,
+                    SavingsGoal.deadline >= today
+                ).all()
+                
+                if not active_goals:
+                    continue
+                
+                for goal in active_goals:
+                    days_remaining = (goal.deadline - today).days
+                    notify_days = goal.notify_days_before or [30, 15, 7, 3, 1]
+                    
+                    # Check if we should send a reminder today
+                    if days_remaining in notify_days:
+                        # Check if we already sent a reminder for this goal today
+                        today_start = datetime.combine(today, datetime.min.time())
+                        recent_notifications = db.query(Notification).filter(
+                            Notification.user_id == user.id,
+                            Notification.type == NotificationType.SAVINGS_GOAL_REMINDER,
+                            Notification.sent_at >= today_start
+                        ).all()
+                        
+                        # Check if any notification is for this goal
+                        recent_notification = None
+                        for notif in recent_notifications:
+                            if notif.payload and notif.payload.get('goal_name') == goal.name:
+                                recent_notification = notif
+                                break
+                        
+                        if not recent_notification:
+                            import asyncio
+                            asyncio.run(
+                                notification_service.send_savings_goal_reminder(
+                                    db=db,
+                                    user=user,
+                                    goal_name=goal.name,
+                                    target_amount=goal.target_amount,
+                                    current_amount=goal.current_amount,
+                                    deadline=goal.deadline,
+                                    days_remaining=days_remaining
+                                )
+                            )
+                            goal.last_notification_sent = today
+                            db.commit()
+                            logger.info(f"Sent savings goal reminder to user {user.id} for goal '{goal.name}' ({days_remaining} days remaining)")
+                    
+                    # Check if deadline is approaching (within 1 day) and goal is not completed
+                    if days_remaining <= 1 and goal.current_amount < goal.target_amount:
+                        # Check if we already sent a deadline warning today
+                        today_start = datetime.combine(today, datetime.min.time())
+                        recent_deadline_notifications = db.query(Notification).filter(
+                            Notification.user_id == user.id,
+                            Notification.type == NotificationType.SAVINGS_GOAL_DEADLINE,
+                            Notification.sent_at >= today_start
+                        ).all()
+                        
+                        # Check if any notification is for this goal
+                        recent_deadline_notification = None
+                        for notif in recent_deadline_notifications:
+                            if notif.payload and notif.payload.get('goal_name') == goal.name:
+                                recent_deadline_notification = notif
+                                break
+                        
+                        if not recent_deadline_notification:
+                            import asyncio
+                            asyncio.run(
+                                notification_service.send_savings_goal_reminder(
+                                    db=db,
+                                    user=user,
+                                    goal_name=goal.name,
+                                    target_amount=goal.target_amount,
+                                    current_amount=goal.current_amount,
+                                    deadline=goal.deadline,
+                                    days_remaining=days_remaining
+                                )
+                            )
+                            goal.last_notification_sent = today
+                            db.commit()
+                            logger.info(f"Sent savings goal deadline warning to user {user.id} for goal '{goal.name}'")
+                            
+            except Exception as e:
+                logger.error(f"Error checking savings goals for user {user.id}: {e}", exc_info=True)
+                continue
+                
+    except Exception as e:
+        logger.error(f"Error in check_savings_goals_reminders: {e}", exc_info=True)
     finally:
         db.close()
 

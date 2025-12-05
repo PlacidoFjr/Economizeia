@@ -4,8 +4,11 @@ from fastapi.responses import JSONResponse
 import logging
 
 from app.core.config import settings
-from app.api.v1 import auth, bills, payments, notifications, qa, chatbot
+from app.api.v1 import auth, bills, payments, notifications, qa, chatbot, savings_goals, investments
 from app.db.database import engine, Base
+
+# Importar modelos para garantir que sejam registrados no Base.metadata
+from app.db.models import SavingsGoal, Investment  # noqa: F401
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +45,8 @@ app.include_router(payments.router, prefix="/api/v1/payments", tags=["Pagamentos
 app.include_router(notifications.router, prefix="/api/v1/notifications", tags=["Notificações"])
 app.include_router(qa.router, prefix="/api/v1/qa", tags=["QA"])
 app.include_router(chatbot.router, prefix="/api/v1/chatbot", tags=["Chatbot"])
+app.include_router(savings_goals.router, prefix="/api/v1/savings-goals", tags=["Metas de Economia"])
+app.include_router(investments.router, prefix="/api/v1/investments", tags=["Investimentos"])
 
 
 @app.get("/")

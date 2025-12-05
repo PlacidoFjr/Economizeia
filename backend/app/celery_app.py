@@ -27,6 +27,10 @@ celery_app.conf.update(
             'task': 'check_upcoming_payments',
             'schedule': 86400.0,  # Run daily at midnight UTC
         },
+        'check-savings-goals-reminders-daily': {
+            'task': 'check_savings_goals_reminders',
+            'schedule': 86400.0,  # Run daily at midnight UTC
+        },
     },
 )
 

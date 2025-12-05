@@ -3,11 +3,17 @@ import axios from 'axios'
 // Usar variável de ambiente ou fallback para desenvolvimento
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
+// Aviso se a URL não estiver configurada em produção
+if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
+  console.error('⚠️ VITE_API_URL não configurada! Configure no Vercel → Settings → Environment Variables')
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 segundos
 })
 
 // Request interceptor to add token
@@ -23,6 +29,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Tratamento de timeout ou erro de conexão
+    if (error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) {
+      const errorMessage = API_BASE_URL.startsWith('http') 
+        ? 'Não foi possível conectar ao servidor. Verifique sua conexão.'
+        : 'URL da API não configurada. Verifique as variáveis de ambiente.'
+      return Promise.reject(new Error(errorMessage))
+    }
+
     if (error.response?.status === 401) {
       // Try to refresh token
       const refreshToken = localStorage.getItem('refresh_token')

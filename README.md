@@ -1,151 +1,139 @@
-# FinGuia - Sistema de Organização Financeira Pessoal
+# 💰 EconomizeIA
 
-Sistema completo para gestão de boletos e faturas com OCR, classificação semântica via Ollama, agendamento de pagamentos e notificações.
+Sistema de gestão financeira pessoal com IA, OCR e notificações automáticas.
 
-## 🏗️ Arquitetura
+## 🚀 Funcionalidades
 
-- **Backend**: FastAPI (Python)
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Banco de Dados**: PostgreSQL
-- **Fila de Jobs**: Redis + Celery
+- 📄 **Upload de Boletos com OCR**: Envie seus boletos e faturas, nossa IA extrai as informações automaticamente
+- 🤖 **Assistente Virtual Inteligente**: Chatbot com IA (Gemini/Ollama) para ajudar com suas finanças
+- 📊 **Dashboard Completo**: Visualize receitas, despesas, gráficos e análises
+- 🔔 **Notificações Automáticas**: Alertas por email quando extrapolar receita ou pagamentos próximos
+- 💳 **Gestão de Finanças**: Separação entre boletos e outras transações financeiras
+- 📅 **Agendamento de Pagamentos**: Organize seus pagamentos e receba lembretes
+- 🔐 **Segurança**: Autenticação JWT, verificação de email, LGPD compliant
+
+## 🛠️ Tecnologias
+
+- **Backend**: FastAPI (Python), PostgreSQL, Redis, Celery
+- **Frontend**: React, TypeScript, Tailwind CSS, Vite
+- **IA**: Google Gemini API ou Ollama (local)
+- **OCR**: Tesseract, OCRmyPDF
 - **Storage**: MinIO (S3 compatible)
-- **AI/ML**: Ollama (local ou cloud)
-- **OCR**: Tesseract / OCRmyPDF
 
-## 🚀 Início Rápido
-
-### 📚 Guias Disponíveis
-
-- **👶 Para Iniciantes:** [`GUIA_PASSO_A_PASSO.md`](GUIA_PASSO_A_PASSO.md) - Guia completo e detalhado passo a passo
-- **⚡ Para Experientes:** [`QUICK_START.md`](QUICK_START.md) - Setup rápido em 5 minutos
-- **🔧 Configuração Avançada:** [`SETUP.md`](SETUP.md) - Detalhes técnicos e troubleshooting
+## 📦 Instalação
 
 ### Pré-requisitos
 
 - Docker e Docker Compose
-- Python 3.11+
-- Node.js 18+
-- Ollama instalado e rodando (ou endpoint configurável)
+- Node.js 18+ e npm
+- Python 3.11+ (para desenvolvimento local)
 
 ### Configuração Rápida
 
-1. **Configure o ambiente:**
-   ```bash
-   cp .env.example .env
-   # Edite .env com suas configurações (especialmente SECRET_KEY)
-   ```
-
-2. **Inicie os serviços:**
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Crie o banco de dados:**
-   
-   **Windows (PowerShell):**
-   ```powershell
-   Get-Content backend/app/db/schema.sql | docker exec -i finguia-postgres psql -U finguia -d finguia_db
-   ```
-   
-   **Mac/Linux:**
-   ```bash
-   docker exec -i finguia-postgres psql -U finguia -d finguia_db < backend/app/db/schema.sql
-   ```
-   
-   **Ou use o script:**
-   ```powershell
-   .\scripts\criar_banco.ps1
-   ```
-
-4. **Popule dados de teste:**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   python scripts/seed_data.py
-   ```
-
-5. **Inicie o frontend:**
-   ```bash
-   cd ../frontend
-   npm install
-   npm run dev
-   ```
-
-6. **Acesse:**
-   - Frontend: http://localhost:3000
-   - API Docs: http://localhost:8000/api/docs
-   - Login: `teste@finguia.com` / `senha123`
-
-### Configuração do Ollama
-
-O sistema espera que o Ollama esteja rodando. Você pode:
-
-1. **Instalar localmente**: https://ollama.ai
-2. **Usar endpoint remoto**: Configure `OLLAMA_BASE_URL` no `.env`
-
-Modelo recomendado: `llama3.2` ou `mistral`
-
-Para baixar o modelo:
+1. **Clone o repositório**
 ```bash
-ollama pull llama3.2
-ollama serve  # Mantenha rodando em um terminal
+git clone https://github.com/seu-usuario/economizeia.git
+cd economizeia
 ```
 
-## 📁 Estrutura do Projeto
+2. **Configure variáveis de ambiente**
+```bash
+# Copie o arquivo de exemplo
+cp backend/.env.example backend/.env
+
+# Edite o .env com suas configurações
+nano backend/.env
+```
+
+3. **Inicie os serviços**
+```bash
+docker-compose up -d
+```
+
+4. **Acesse a aplicação**
+- Frontend: http://localhost:5173
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/api/docs
+
+## 🔧 Configuração
+
+### Variáveis de Ambiente Importantes
+
+```env
+# Security (OBRIGATÓRIO - gere uma chave forte!)
+SECRET_KEY=sua-chave-secreta-aqui
+
+# Database
+DATABASE_URL=postgresql://economizeia:economizeia_dev@postgres:5432/economizeia_db
+
+# SMTP (para emails)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=seu-email@gmail.com
+SMTP_PASSWORD=senha-de-app-gmail
+
+# Google Gemini (opcional)
+GEMINI_API_KEY=sua-chave-gemini
+USE_GEMINI=true
+```
+
+### Gerar SECRET_KEY
+
+```bash
+openssl rand -hex 32
+```
+
+## 📚 Documentação
+
+- [Guia de Deploy no Vercel](DEPLOY_VERCEL_RAPIDO.md)
+- [Guia Completo de Deploy](docs/DEPLOY_PRODUCAO.md)
+- [Configurar Git e GitHub](docs/GUIA_GIT_PASSO_A_PASSO.md)
+- [Configurar Gemini](docs/CONFIGURAR_GEMINI.md)
+- [Troubleshooting](docs/TROUBLESHOOTING_FRONTEND.md)
+
+## 🚀 Deploy
+
+### Vercel + Railway (Recomendado)
+
+1. **Frontend no Vercel**: Veja [DEPLOY_VERCEL_RAPIDO.md](DEPLOY_VERCEL_RAPIDO.md)
+2. **Backend no Railway**: Conecte seu repositório GitHub
+3. Configure variáveis de ambiente em cada plataforma
+
+## 📝 Estrutura do Projeto
 
 ```
-FINDGUIA/
+economizeia/
 ├── backend/          # API FastAPI
+│   ├── app/
+│   │   ├── api/      # Endpoints
+│   │   ├── services/ # Serviços (OCR, IA, etc)
+│   │   └── db/       # Modelos e database
+│   └── requirements.txt
 ├── frontend/         # React + TypeScript
-├── docker/           # Configurações Docker
-├── scripts/          # Scripts de seed e testes
-└── docs/             # Documentação
+│   ├── src/
+│   │   ├── pages/    # Páginas
+│   │   ├── components/
+│   │   └── services/
+│   └── package.json
+└── docker-compose.yml
 ```
 
 ## 🔐 Segurança
 
-- Autenticação JWT com refresh tokens
-- Hashing de senhas com Argon2id
-- Criptografia AES-256 para dados sensíveis
-- TLS obrigatório em produção
-- Logs de auditoria imutáveis
-- Compliance LGPD
+- ✅ `.env` está no `.gitignore` (não será commitado)
+- ✅ Use `.env.example` como referência
+- ✅ Gere SECRET_KEY forte para produção
+- ✅ Configure CORS adequadamente
+- ✅ Use HTTPS em produção
 
-## 📊 Endpoints Principais
+## 📄 Licença
 
-### Autenticação
-- `POST /api/v1/auth/register` - Registro de usuário
-- `POST /api/v1/auth/login` - Login (retorna JWT)
-- `POST /api/v1/auth/refresh` - Refresh token
+Este projeto é privado. Todos os direitos reservados.
 
-### Boletos
-- `POST /api/v1/bills/upload` - Upload de boleto (PDF/IMG)
-- `GET /api/v1/bills/{id}` - Detalhes do boleto
-- `POST /api/v1/bills/{id}/confirm` - Confirmar/corrigir dados
-- `POST /api/v1/bills/{id}/schedule` - Agendar pagamento
-- `POST /api/v1/bills/{id}/mark-paid` - Marcar como pago
+## 👥 Contribuindo
 
-### Pagamentos
-- `GET /api/v1/payments` - Listar pagamentos
-- `POST /api/v1/payments/{id}/reconcile` - Reconciliar com extrato
+Este é um projeto privado. Para questões ou sugestões, abra uma issue.
 
-### Notificações
-- `POST /api/v1/notifications/test` - Testar notificação
-- `GET /api/v1/notifications/logs` - Logs de notificações
+---
 
-## 🧪 Testes
-
-```bash
-# Backend
-cd backend
-pytest
-
-# Frontend
-cd frontend
-npm test
-```
-
-## 📝 Licença
-
-Proprietário - Uso interno
-
+**EconomizeIA** - Organize suas finanças com inteligência artificial 🚀
