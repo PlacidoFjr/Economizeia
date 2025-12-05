@@ -211,79 +211,79 @@ export default function Dashboard() {
   // const scheduledPayments = payments?.filter((p: any) => p.status === 'scheduled').length || 0
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Painel de Controle</h1>
-        <p className="text-sm text-gray-600">Visão geral das suas finanças</p>
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 pb-20 sm:pb-6">
+      <div className="mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Painel de Controle</h1>
+        <p className="text-xs sm:text-sm text-gray-600">Visão geral das suas finanças</p>
       </div>
 
       {/* Stats Principais */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-white border border-green-200 p-4 rounded-lg">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 lg:gap-4">
+        <div className="bg-white border border-green-200 p-3 sm:p-4 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Receitas do Mês</p>
-              <p className="text-xl font-bold text-green-700">R$ {incomeThisMonth.toFixed(2)}</p>
-              <p className="text-xs text-gray-500 mt-1">{currentMonthYear}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Receitas do Mês</p>
+              <p className="text-lg sm:text-xl font-bold text-green-700 truncate">R$ {incomeThisMonth.toFixed(2)}</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">{currentMonthYear}</p>
             </div>
-            <div className="bg-green-100 p-2 rounded">
-              <ArrowUpCircle className="w-5 h-5 text-green-600" />
+            <div className="bg-green-100 p-1.5 sm:p-2 rounded flex-shrink-0 ml-2">
+              <ArrowUpCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-white border border-red-200 p-4 rounded-lg">
+        <div className="bg-white border border-red-200 p-3 sm:p-4 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Despesas do Mês</p>
-              <p className="text-xl font-bold text-red-700">R$ {expensesThisMonth.toFixed(2)}</p>
-              <p className="text-xs text-gray-500 mt-1">{currentMonthYear}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Despesas do Mês</p>
+              <p className="text-lg sm:text-xl font-bold text-red-700 truncate">R$ {expensesThisMonth.toFixed(2)}</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">{currentMonthYear}</p>
             </div>
-            <div className="bg-red-100 p-2 rounded">
-              <ArrowDownCircle className="w-5 h-5 text-red-600" />
+            <div className="bg-red-100 p-1.5 sm:p-2 rounded flex-shrink-0 ml-2">
+              <ArrowDownCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
             </div>
           </div>
         </div>
 
-        <div className={`bg-white border ${balanceThisMonth >= 0 ? 'border-green-200' : 'border-red-200'} p-4 rounded-lg`}>
+        <div className={`bg-white border ${balanceThisMonth >= 0 ? 'border-green-200' : 'border-red-200'} p-3 sm:p-4 rounded-lg shadow-sm`}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Saldo do Mês</p>
-              <p className={`text-xl font-bold ${balanceThisMonth >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Saldo do Mês</p>
+              <p className={`text-lg sm:text-xl font-bold truncate ${balanceThisMonth >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                 R$ {balanceThisMonth.toFixed(2)}
               </p>
-              <p className={`text-xs mt-1 ${balanceThisMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <p className={`text-[10px] sm:text-xs mt-0.5 sm:mt-1 ${balanceThisMonth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {balanceThisMonth >= 0 ? 'Positivo' : 'Negativo'}
               </p>
             </div>
-            <div className={`p-2 rounded ${balanceThisMonth >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-              <DollarSign className={`w-5 h-5 ${balanceThisMonth >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+            <div className={`p-1.5 sm:p-2 rounded flex-shrink-0 ml-2 ${balanceThisMonth >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+              <DollarSign className={`w-4 h-4 sm:w-5 sm:h-5 ${balanceThisMonth >= 0 ? 'text-green-600' : 'text-red-600'}`} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 p-4 rounded-lg">
+        <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-1">Boletos Pendentes</p>
-              <p className="text-xl font-bold text-gray-900">{pendingBills.length}</p>
-              <p className="text-xs text-gray-500 mt-1">R$ {totalPending.toFixed(2)}</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Boletos Pendentes</p>
+              <p className="text-lg sm:text-xl font-bold text-gray-900">{pendingBills.length}</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">R$ {totalPending.toFixed(2)}</p>
             </div>
-            <div className="bg-gray-100 p-2 rounded">
-              <FileText className="w-5 h-5 text-gray-600" />
+            <div className="bg-gray-100 p-1.5 sm:p-2 rounded flex-shrink-0 ml-2">
+              <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Gráficos Principais */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Receitas vs Despesas */}
         <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
             Receitas vs Despesas (Mês Atual)
           </h3>
-          <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+          <ResponsiveContainer width="100%" height={200} className="sm:h-[240px] lg:h-[280px]">
             <BarChart data={incomeVsExpenses} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
               <XAxis 
@@ -326,7 +326,7 @@ export default function Dashboard() {
           </h3>
           {categoryChartData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+              <ResponsiveContainer width="100%" height={200} className="sm:h-[240px] lg:h-[280px]">
                 <PieChart>
                   <Pie
                     data={categoryChartData}
@@ -400,7 +400,7 @@ export default function Dashboard() {
             </div>
             {investmentTypeChartData.length > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+                <ResponsiveContainer width="100%" height={200} className="sm:h-[240px] lg:h-[280px]">
                   <PieChart>
                     <Pie
                       data={investmentTypeChartData}
@@ -514,7 +514,7 @@ export default function Dashboard() {
           <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-3 sm:mb-4">
             Evolução Financeira (Últimos 6 Meses)
           </h3>
-          <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+          <ResponsiveContainer width="100%" height={200} className="sm:h-[240px] lg:h-[280px]">
             <AreaChart data={monthlyData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
@@ -587,7 +587,7 @@ export default function Dashboard() {
             Top Emissores (Gastos)
           </h3>
           {issuerChartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220} className="sm:h-[280px]">
+            <ResponsiveContainer width="100%" height={200} className="sm:h-[240px] lg:h-[280px]">
               <BarChart data={issuerChartData} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" opacity={0.5} />
                 <XAxis 
