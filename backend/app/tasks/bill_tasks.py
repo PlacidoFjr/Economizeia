@@ -48,11 +48,26 @@ def process_bill_upload(bill_id: str, document_id: str):
         # Get presigned URL for image (if needed by Ollama)
         image_url = storage_service.get_presigned_url(object_name, expires_seconds=3600)
         
-        # Extract structured data with Ollama
-        logger.info(f"Starting Ollama extraction for bill {bill_id}")
+        # Extract structured data with Ollama (prioridade) ou Gemini
+        logger.info(f"Starting AI extraction for bill {bill_id}")
         import asyncio
+        from app.services.gemini_service import get_gemini_service
+        
+        # Priorizar Ollama, usar Gemini apenas se Ollama não estiver disponível
+        try:
+            ai_service = ollama_service
+            logger.info(f"Usando Ollama para extração de campos do boleto {bill_id}")
+        except:
+            gemini_service = get_gemini_service()
+            if gemini_service:
+                ai_service = gemini_service
+                logger.info(f"Ollama não disponível, usando Gemini para extração de campos do boleto {bill_id}")
+            else:
+                logger.error(f"Nenhum serviço de IA disponível para extração de campos")
+                raise Exception("Nenhum serviço de IA disponível")
+        
         extracted = asyncio.run(
-            ollama_service.extract_bill_fields(
+            ai_service.extract_bill_fields(
                 ocr_text=ocr_text,
                 image_url=image_url,
                 metadata={"filename": document.s3_path}

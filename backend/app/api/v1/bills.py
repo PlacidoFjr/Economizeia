@@ -143,15 +143,28 @@ async def upload_bill(
                 
                 logger.info(f"OCR concluído para boleto {bill.id}. Texto extraído: {len(ocr_text)} caracteres, confiança: {ocr_confidence:.2f}")
                 
-                # Se houver texto extraído, tentar extrair campos com Ollama/Gemini
+                # Se houver texto extraído, tentar extrair campos com Ollama (prioridade) ou Gemini
                 if ocr_text and len(ocr_text.strip()) > 10:
                     try:
                         import asyncio
                         from app.services.ollama_service import ollama_service
                         from app.services.gemini_service import get_gemini_service
                         
-                        # Usar Gemini se disponível, senão Ollama
-                        ai_service = get_gemini_service() or ollama_service
+                        # Priorizar Ollama, usar Gemini apenas se Ollama não estiver disponível
+                        # Verificar se Ollama está configurado e acessível
+                        try:
+                            # Tentar usar Ollama primeiro
+                            ai_service = ollama_service
+                            logger.info(f"Usando Ollama para extração de campos do boleto {bill.id}")
+                        except:
+                            # Fallback para Gemini se Ollama não estiver disponível
+                            gemini_service = get_gemini_service()
+                            if gemini_service:
+                                ai_service = gemini_service
+                                logger.info(f"Ollama não disponível, usando Gemini para extração de campos do boleto {bill.id}")
+                            else:
+                                logger.warning(f"Nenhum serviço de IA disponível para extração de campos")
+                                raise Exception("Nenhum serviço de IA disponível")
                         
                         image_url = None
                         try:

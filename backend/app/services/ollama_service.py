@@ -14,6 +14,9 @@ class OllamaService:
         self.base_url = settings.OLLAMA_BASE_URL
         self.model = settings.OLLAMA_MODEL
         self.timeout = 25.0  # Timeout de 25s - balanceado entre rapidez e completude
+        # Modelos vision-capable do Ollama que podem fazer OCR direto
+        self.vision_models = ["llava", "bakllava", "llava:13b", "llava:7b"]
+        self.supports_vision = any(vm in self.model.lower() for vm in self.vision_models)
     
     async def extract_bill_fields(self, ocr_text: str, image_url: Optional[str] = None, 
                                   metadata: Optional[Dict] = None) -> Dict[str, Any]:
