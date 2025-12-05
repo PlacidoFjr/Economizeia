@@ -2,6 +2,31 @@ from pydantic_settings import BaseSettings
 from typing import List
 import os
 import json
+from pathlib import Path
+
+# Carregar .env apenas em desenvolvimento local (não no Railway/produção)
+# No Railway, as variáveis vêm das Environment Variables configuradas na plataforma
+if os.getenv("ENVIRONMENT", "development") == "development" or not os.getenv("RAILWAY_ENVIRONMENT"):
+    try:
+        from dotenv import load_dotenv
+        
+        # Tenta carregar de diferentes locais
+        env_paths = [
+            Path(__file__).parent.parent.parent / ".env",  # backend/.env
+            Path(__file__).parent.parent.parent.parent / ".env",  # raiz do projeto/.env
+            Path(".env"),  # diretório atual
+        ]
+        
+        for env_path in env_paths:
+            if env_path.exists():
+                load_dotenv(dotenv_path=env_path, override=False)  # override=False: variáveis de ambiente têm prioridade
+                break
+        else:
+            # Se não encontrou, tenta carregar do diretório atual
+            load_dotenv(override=False)
+    except ImportError:
+        # Se python-dotenv não estiver instalado, continua sem .env (normal no Railway)
+        pass
 
 
 class Settings(BaseSettings):
@@ -119,9 +144,28 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:3000"
     
     class Config:
-        env_file = ".env"
+        # Prioridade: Variáveis de ambiente do sistema > .env
+        # No Railway, as variáveis vêm das Environment Variables configuradas
+        env_file = ".env"  # Usado apenas se a variável não existir no sistema
+        env_file_encoding = "utf-8"
         case_sensitive = True
+        # Importante: pydantic-settings já prioriza variáveis de ambiente sobre .env por padrão
 
 
+# Criar settings após carregar .env
 settings = Settings()
+
+# Log das configurações carregadas (sem mostrar valores sensíveis)
+import logging
+logger = logging.getLogger(__name__)
+logger.info("=" * 50)
+logger.info("Configurações carregadas:")
+logger.info(f"  DATABASE_URL: {'✅ Configurado' if settings.DATABASE_URL and 'localhost' not in settings.DATABASE_URL else '⚠️ Usando padrão local'}")
+logger.info(f"  REDIS_URL: {'✅ Configurado' if settings.REDIS_URL and 'localhost' not in settings.REDIS_URL else '⚠️ Usando padrão local'}")
+logger.info(f"  SMTP_HOST: {'✅ Configurado' if settings.SMTP_HOST else '❌ Não configurado'}")
+logger.info(f"  GEMINI_API_KEY: {'✅ Configurado' if settings.GEMINI_API_KEY else '❌ Não configurado'}")
+logger.info(f"  CORS_ORIGINS: {settings.CORS_ORIGINS[:100] if len(settings.CORS_ORIGINS) > 100 else settings.CORS_ORIGINS}")
+logger.info(f"  FRONTEND_URL: {settings.FRONTEND_URL}")
+logger.info(f"  ENVIRONMENT: {settings.ENVIRONMENT}")
+logger.info("=" * 50)
 

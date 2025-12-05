@@ -572,7 +572,7 @@ Equipe EconomizeIA
                                         
                                         <div style="background-color: #fef3c7; border-radius: 8px; padding: 16px; border-left: 4px solid #f59e0b;">
                                             <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6;">
-                                                <strong>💡 Dica:</strong> {'Após verificar seu email, você poderá fazer login normalmente.' if resend_verification and not user.email_verified else 'Se você esqueceu sua senha, use a opção \'Esqueci minha senha\' na página de login.'}
+                                                <strong>💡 Dica:</strong> {'Após verificar seu email, você poderá fazer login normalmente.' if resend_verification and not user.email_verified else 'Se você esqueceu sua senha, use a opção "Esqueci minha senha" na página de login.'}
                                             </p>
                                         </div>
                                     </td>
@@ -597,24 +597,40 @@ Equipe EconomizeIA
             </html>
             """
             
-            text_body = f"""
-Olá {user_name},
-
-Notamos que você tentou criar uma nova conta, mas este email já está cadastrado no EconomizeIA!
-
-{"Seu email ainda não foi verificado. Para acessar sua conta, você precisa confirmar seu email primeiro." if resend_verification and not user.email_verified else ""}
-
-{"Link de verificação: " + verification_link if resend_verification and not user.email_verified and verification_link else ""}
-
-Para acessar sua conta, faça login em: {login_link}
-
-{"Se você esqueceu sua senha, use a opção 'Esqueci minha senha' na página de login." if user.email_verified else ""}
-
-Se você não tentou criar uma conta, pode ignorar este email com segurança.
-
-Atenciosamente,
-Equipe EconomizeIA
-"""
+            # Construir text_body sem usar f-string com expressões complexas
+            text_parts = [
+                f"Olá {user_name},",
+                "",
+                "Notamos que você tentou criar uma nova conta, mas este email já está cadastrado no EconomizeIA!",
+                ""
+            ]
+            
+            if resend_verification and not user.email_verified:
+                text_parts.extend([
+                    "Seu email ainda não foi verificado. Para acessar sua conta, você precisa confirmar seu email primeiro.",
+                    ""
+                ])
+                if verification_link:
+                    text_parts.append(f"Link de verificação: {verification_link}")
+                    text_parts.append("")
+            
+            text_parts.extend([
+                f"Para acessar sua conta, faça login em: {login_link}",
+                ""
+            ])
+            
+            if user.email_verified:
+                text_parts.append('Se você esqueceu sua senha, use a opção "Esqueci minha senha" na página de login.')
+                text_parts.append("")
+            
+            text_parts.extend([
+                "Se você não tentou criar uma conta, pode ignorar este email com segurança.",
+                "",
+                "Atenciosamente,",
+                "Equipe EconomizeIA"
+            ])
+            
+            text_body = "\n".join(text_parts)
             
             logger.info(f"Sending 'email already registered' notification to {user.email}")
             
