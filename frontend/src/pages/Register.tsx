@@ -57,22 +57,28 @@ export default function Register() {
         navigate('/app/dashboard')
       }
     } catch (err: any) {
+      console.error('❌ Erro no registro:', err)
       let errorMsg = 'Erro ao registrar'
       
       if (err.message) {
         // Erro de conexão/timeout
         errorMsg = err.message
+        console.error('❌ Mensagem de erro:', err.message)
       } else if (err.response?.data?.detail) {
         // Erro do backend
         errorMsg = err.response.data.detail
+        console.error('❌ Erro do backend:', err.response.data)
+      } else if (err.response) {
+        errorMsg = `Erro ${err.response.status}: ${err.response.statusText}`
+        console.error('❌ Erro HTTP:', err.response.status, err.response.statusText)
       }
       
       if (errorMsg.includes('já cadastrado') || errorMsg.includes('já existe')) {
         showToast('Este email já está cadastrado. Tente fazer login.', 'error', 6000)
-      } else if (errorMsg.includes('conectar') || errorMsg.includes('timeout') || errorMsg.includes('API não configurada')) {
-        showToast('Erro de conexão. Verifique se o backend está configurado corretamente.', 'error', 8000)
+      } else if (errorMsg.includes('conectar') || errorMsg.includes('timeout') || errorMsg.includes('API não configurada') || errorMsg.includes('Network Error')) {
+        showToast(`Erro de conexão: ${errorMsg}`, 'error', 10000)
       } else {
-        showToast(errorMsg, 'error', 5000)
+        showToast(errorMsg, 'error', 8000)
       }
     } finally {
       setLoading(false)

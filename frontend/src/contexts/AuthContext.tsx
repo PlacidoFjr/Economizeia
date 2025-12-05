@@ -33,7 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
+      console.log('🔐 Tentando fazer login...')
+      console.log('🔐 URL da API:', api.defaults.baseURL)
       const response = await api.post('/auth/login', { email, password })
+      console.log('✅ Login bem-sucedido:', response.data)
       const { access_token, refresh_token } = response.data
       setToken(access_token)
       localStorage.setItem('access_token', access_token)
@@ -41,23 +44,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
       // Fetch user data if needed
     } catch (error: any) {
+      console.error('❌ Erro no login (AuthContext):', error)
       // Re-throw para o componente tratar
       throw error
     }
   }
 
   const register = async (name: string, email: string, password: string) => {
-    const response = await api.post('/auth/register', { name, email, password })
-    // Se não requer verificação, fazer login automático
-    if (response.data.access_token) {
-      const { access_token, refresh_token } = response.data
-      setToken(access_token)
-      localStorage.setItem('access_token', access_token)
-      localStorage.setItem('refresh_token', refresh_token)
-      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+    try {
+      console.log('📝 Tentando registrar usuário...')
+      console.log('📝 URL da API:', api.defaults.baseURL)
+      const response = await api.post('/auth/register', { name, email, password })
+      console.log('✅ Registro bem-sucedido:', response.data)
+      // Se não requer verificação, fazer login automático
+      if (response.data.access_token) {
+        const { access_token, refresh_token } = response.data
+        setToken(access_token)
+        localStorage.setItem('access_token', access_token)
+        localStorage.setItem('refresh_token', refresh_token)
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
+      }
+      // Retornar resposta para o componente decidir o que fazer
+      return response.data
+    } catch (error: any) {
+      console.error('❌ Erro no registro (AuthContext):', error)
+      throw error
     }
-    // Retornar resposta para o componente decidir o que fazer
-    return response.data
   }
 
   const logout = () => {

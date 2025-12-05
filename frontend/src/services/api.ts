@@ -3,6 +3,11 @@ import axios from 'axios'
 // Usar variável de ambiente ou fallback para desenvolvimento
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
+// Log da URL da API para debug
+console.log('🔧 API Base URL:', API_BASE_URL)
+console.log('🔧 Environment:', import.meta.env.MODE)
+console.log('🔧 VITE_API_URL:', import.meta.env.VITE_API_URL)
+
 // Aviso se a URL não estiver configurada em produção
 if (import.meta.env.PROD && !import.meta.env.VITE_API_URL) {
   console.error('⚠️ VITE_API_URL não configurada! Configure no Vercel → Settings → Environment Variables')
@@ -29,11 +34,22 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Log detalhado do erro para debug
+    console.error('❌ Erro na API:', {
+      code: error.code,
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+    })
+
     // Tratamento de timeout ou erro de conexão
     if (error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) {
       const errorMessage = API_BASE_URL.startsWith('http') 
-        ? 'Não foi possível conectar ao servidor. Verifique sua conexão.'
-        : 'URL da API não configurada. Verifique as variáveis de ambiente.'
+        ? `Não foi possível conectar ao servidor (${API_BASE_URL}). Verifique se o backend está rodando e se a URL está correta.`
+        : 'URL da API não configurada. Configure VITE_API_URL no Vercel → Settings → Environment Variables.'
+      console.error('❌ Erro de conexão:', errorMessage)
       return Promise.reject(new Error(errorMessage))
     }
 

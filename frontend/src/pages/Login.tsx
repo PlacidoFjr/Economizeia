@@ -45,14 +45,29 @@ export default function Login() {
       showToast('Login realizado com sucesso!', 'success')
       navigate('/app/dashboard')
     } catch (err: any) {
-      const errorDetail = err.response?.data?.detail || 'Erro ao fazer login'
+      console.error('❌ Erro no login:', err)
+      let errorDetail = 'Erro ao fazer login'
+      
+      if (err.message) {
+        errorDetail = err.message
+        console.error('❌ Mensagem de erro:', err.message)
+      } else if (err.response?.data?.detail) {
+        errorDetail = err.response.data.detail
+        console.error('❌ Erro do backend:', err.response.data)
+      } else if (err.response) {
+        errorDetail = `Erro ${err.response.status}: ${err.response.statusText}`
+        console.error('❌ Erro HTTP:', err.response.status, err.response.statusText)
+      }
+      
       // Se o erro for sobre email não verificado, mostrar mensagem mais clara
       if (errorDetail.includes('não verificado') || errorDetail.includes('verificar')) {
         showToast('Email não verificado. Verifique sua caixa de entrada e clique no link de confirmação.', 'warning', 8000)
       } else if (errorDetail.includes('incorretos') || errorDetail.includes('senha')) {
         showToast('Email ou senha incorretos. Verifique suas credenciais.', 'error', 5000)
+      } else if (errorDetail.includes('conectar') || errorDetail.includes('timeout') || errorDetail.includes('API não configurada') || errorDetail.includes('Network Error')) {
+        showToast(`Erro de conexão: ${errorDetail}`, 'error', 10000)
       } else {
-        showToast(errorDetail, 'error', 5000)
+        showToast(errorDetail, 'error', 8000)
       }
     } finally {
       setLoading(false)
