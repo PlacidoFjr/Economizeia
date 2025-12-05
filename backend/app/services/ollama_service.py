@@ -254,7 +254,7 @@ Se SIM (usuário quer criar despesa), retorne APENAS JSON válido:
   "issuer": "string or null",
   "amount": "decimal or null",
   "due_date": "YYYY-MM-DD or null",
-  "category": "alimentacao|moradia|servicos|transporte|saude|investimentos|outras or null",
+  "category": "alimentacao|moradia|servicos|transporte|saude|vestuario|compras|lazer|educacao|investimentos|outras or null",
   "description": "string or null",
   "is_installment": false,
   "installment_total": null,
@@ -296,14 +296,18 @@ Se NÃO (não é comando de criação), retorne:
   - Se não especificada, usar null
 
 ### CATEGORIAS:
-Mapear palavras-chave para categorias:
-- alimentacao: comida, restaurante, supermercado, mercado, padaria, lanche
-- moradia: aluguel, condomínio, água, luz, energia, gás, internet, telefone, IPTU
-- servicos: serviço, manutenção, reparo, conserto, limpeza
-- transporte: gasolina, combustível, uber, táxi, ônibus, metrô, estacionamento, pedágio
-- saude: médico, remédio, farmácia, hospital, plano de saúde, dentista
-- investimentos: investimento, aplicação, poupança, ações
-- outras: qualquer outra coisa não categorizada
+Mapear palavras-chave para categorias (seja específico e preciso):
+- alimentacao: comida, restaurante, supermercado, mercado, padaria, lanche, alimentação, comida, restaurante, delivery, ifood, comida rápida
+- moradia: aluguel, condomínio, água, luz, energia, gás, internet, telefone, IPTU, conta de luz, conta de água, conta de gás
+- servicos: serviço, manutenção, reparo, conserto, limpeza, prestação de serviço, técnico
+- transporte: gasolina, combustível, uber, táxi, ônibus, metrô, estacionamento, pedágio, transporte, viagem, passagem
+- saude: médico, remédio, farmácia, hospital, plano de saúde, dentista, saúde, consulta médica, medicamento
+- vestuario: roupas, roupa, vestuário, calçado, sapatos, tênis, camisa, calça, blusa, moda, loja de roupas, compras de roupas
+- compras: compras, shopping, loja, mercado, supermercado, compra, adquirir, adquirido, comprado
+- lazer: lazer, entretenimento, cinema, show, festa, diversão, entretenimento, jogos, jogos online
+- educacao: educação, escola, curso, faculdade, universidade, material escolar, livro, livros
+- investimentos: investimento, aplicação, poupança, ações, investir, aplicação financeira
+- outras: qualquer outra coisa não categorizada acima
 
 ### EMISSOR/ISSuer:
 - Extrair nome da empresa/loja/fornecedor mencionado

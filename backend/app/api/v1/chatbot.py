@@ -149,16 +149,26 @@ async def chat_with_assistant(
                     default_issuer = "Despesa Manual"
                 
                 # Criar transação (não é boleto, é transação manual)
+                # Usar o amount calculado (pode vir de expense_data ou pending_amount)
+                final_amount = amount if amount else (expense_data.get("amount") if expense_data else 0)
+                
+                # Extrair categoria do expense_data ou usar padrão
+                final_category = None
+                if expense_data and expense_data.get("category"):
+                    final_category = expense_data.get("category")
+                elif transaction_type == BillType.INCOME:
+                    final_category = "outras"  # Receitas geralmente não têm categoria específica
+                
                 bill = Bill(
                     id=uuid.uuid4(),
                     user_id=current_user.id,
                     issuer=default_issuer,
-                    amount=float(expense_data.get("amount", 0)),
+                    amount=float(final_amount),
                     currency="BRL",
                     due_date=due_date,
                     status=BillStatus.CONFIRMED,
                     confidence=0.9,
-                    category=expense_data.get("category"),
+                    category=final_category,
                     type=transaction_type,  # EXPENSE ou INCOME
                     is_bill=False  # Transação manual, não é boleto
                 )

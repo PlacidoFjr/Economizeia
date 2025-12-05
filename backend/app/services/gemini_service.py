@@ -159,7 +159,7 @@ Se for comando de criação:
   "issuer": "string or null",
   "amount": decimal or null,
   "due_date": "YYYY-MM-DD or null",
-  "category": "alimentacao|moradia|servicos|transporte|saude|investimentos|outras or null",
+  "category": "alimentacao|moradia|servicos|transporte|saude|vestuario|compras|lazer|educacao|investimentos|outras or null",
   "is_installment": false,
   "installment_total": null,
   "installment_current": null
@@ -173,7 +173,19 @@ Se NÃO for comando:
 ## REGRAS:
 - Valores: "R$ 150,50" → 150.50
 - Datas: "15/12/2024" → "2024-12-15", "amanhã" → calcular data
-- Categorias: mapear palavras-chave para categorias
+- Categorias: mapear palavras-chave para categorias (seja específico):
+  * alimentacao: comida, restaurante, supermercado, mercado, padaria, lanche, alimentação
+  * moradia: aluguel, condomínio, água, luz, energia, gás, internet, telefone, IPTU
+  * servicos: serviço, manutenção, reparo, conserto, limpeza
+  * transporte: gasolina, combustível, uber, táxi, ônibus, metrô, estacionamento, pedágio
+  * saude: médico, remédio, farmácia, hospital, plano de saúde, dentista
+  * vestuario: roupas, roupa, vestuário, calçado, sapatos, tênis, camisa, calça, blusa, moda
+  * compras: compras, shopping, loja, mercado, supermercado, compra
+  * lazer: lazer, entretenimento, cinema, show, festa, diversão, jogos
+  * educacao: educação, escola, curso, faculdade, universidade, material escolar, livro
+  * investimentos: investimento, aplicação, poupança, ações
+  * outras: qualquer outra coisa não categorizada
+- IMPORTANTE: Se o usuário mencionar "compras" ou "roupas", use as categorias específicas (compras ou vestuario), NÃO use "outras"
 - Responder APENAS JSON, sem texto adicional
 """
         
