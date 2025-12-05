@@ -65,7 +65,7 @@ export default function BillDetail() {
           <h3 className="text-lg font-semibold text-red-900 mb-1">Boleto não encontrado</h3>
           <p className="text-sm text-red-700 mb-4">O boleto solicitado não existe ou foi removido.</p>
           <button
-            onClick={() => navigate('/bills')}
+            onClick={() => navigate('/app/bills')}
             className="px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
           >
             Voltar para Boletos
@@ -82,7 +82,7 @@ export default function BillDetail() {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Detalhes do Boleto</h1>
         <button
-          onClick={() => navigate('/bills')}
+          onClick={() => navigate('/app/bills')}
           className="flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md font-medium text-sm transition-colors"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
