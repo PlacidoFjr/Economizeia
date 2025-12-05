@@ -53,20 +53,24 @@ export default function Login() {
       const statusCode = err.response?.status
       
       // Traduzir mensagens do backend para português amigável
-      if (backendMessage.includes('não verificado') || backendMessage.includes('verificar') || backendMessage.includes('Email não verificado')) {
+      if (backendMessage.includes('não cadastrado') || backendMessage.includes('Email não cadastrado')) {
+        errorMessage = 'Email não cadastrado. Verifique o email ou crie uma conta.'
+      } else if (backendMessage.includes('não verificado') || backendMessage.includes('verificar') || backendMessage.includes('Email não verificado')) {
         errorMessage = 'Seu email ainda não foi verificado. Verifique sua caixa de entrada e clique no link de confirmação que enviamos.'
-      } else if (backendMessage.includes('incorretos') || backendMessage.includes('senha') || backendMessage.includes('Email ou senha')) {
+      } else if (backendMessage.includes('Senha incorreta') || backendMessage.includes('senha incorreta')) {
+        errorMessage = 'Senha incorreta. Verifique sua senha e tente novamente.'
+      } else if (backendMessage.includes('incorretos') || backendMessage.includes('Email ou senha')) {
         errorMessage = 'Email ou senha incorretos. Verifique suas credenciais e tente novamente.'
       } else if (backendMessage.includes('inativa') || backendMessage.includes('inativo')) {
         errorMessage = 'Sua conta está inativa. Entre em contato com o suporte para mais informações.'
       } else if (backendMessage.includes('conectar') || backendMessage.includes('timeout') || backendMessage.includes('Network Error') || backendMessage.includes('API não configurada')) {
         errorMessage = 'Não foi possível conectar ao servidor. Verifique sua conexão com a internet e tente novamente.'
       } else if (statusCode === 401) {
-        errorMessage = 'Email ou senha incorretos. Verifique suas credenciais.'
+        errorMessage = 'Senha incorreta. Verifique sua senha e tente novamente.'
       } else if (statusCode === 403) {
         errorMessage = 'Acesso negado. Verifique se seu email foi confirmado ou entre em contato com o suporte.'
       } else if (statusCode === 404) {
-        errorMessage = 'Usuário não encontrado. Verifique se o email está correto.'
+        errorMessage = 'Email não cadastrado. Verifique o email ou crie uma conta.'
       } else if (statusCode === 500) {
         errorMessage = 'Erro no servidor. Tente novamente em alguns instantes.'
       } else if (backendMessage && !backendMessage.includes('Erro')) {

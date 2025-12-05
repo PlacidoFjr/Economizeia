@@ -146,10 +146,19 @@ async def login(
     """Login and get JWT tokens."""
     user = db.query(User).filter(User.email == credentials.email).first()
     
-    if not user or not verify_password(credentials.password, user.password_hash):
+    # Verificar se o email existe primeiro
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email não cadastrado. Verifique o email ou crie uma conta.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Se o usuário existe, verificar a senha
+    if not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou senha incorretos",
+            detail="Senha incorreta. Verifique sua senha e tente novamente.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
