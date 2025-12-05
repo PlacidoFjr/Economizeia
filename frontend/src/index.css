@@ -227,3 +227,33 @@ select {
   touch-action: manipulation;
 }
 
+/* Esconder barra de navegação do navegador mobile quando chatbot estiver aberto */
+@media (max-width: 640px) {
+  body.chatbot-open-mobile {
+    /* Forçar altura da viewport para esconder barra de navegação */
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+
+  body.chatbot-open-mobile .chatbot-container {
+    /* Usar altura completa da viewport */
+    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
+  }
+
+  /* Esconder barra de navegação do navegador */
+  body.chatbot-open-mobile::after {
+    content: '';
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: env(safe-area-inset-bottom, 0px);
+    background: white;
+    z-index: 9999;
+  }
+}
+

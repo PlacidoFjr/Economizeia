@@ -83,6 +83,29 @@ export default function Chatbot() {
     }
   }, [isOpen])
 
+  // Esconder barra de navegação do navegador mobile quando chatbot estiver aberto
+  useEffect(() => {
+    const isMobile = window.innerWidth < 640 // sm breakpoint do Tailwind
+    
+    if (isOpen && isMobile) {
+      // Adicionar classe ao body para esconder barra de navegação
+      document.body.classList.add('chatbot-open-mobile')
+      // Forçar altura da viewport para esconder barra de navegação
+      const viewportHeight = window.innerHeight
+      document.documentElement.style.setProperty('--vh', `${viewportHeight * 0.01}px`)
+    } else {
+      // Remover classe quando fechar
+      document.body.classList.remove('chatbot-open-mobile')
+      document.documentElement.style.removeProperty('--vh')
+    }
+
+    // Limpar ao desmontar
+    return () => {
+      document.body.classList.remove('chatbot-open-mobile')
+      document.documentElement.style.removeProperty('--vh')
+    }
+  }, [isOpen])
+
   const handleQuickQuestion = (question: string) => {
     setInputText(question)
     handleSendMessage(question)
