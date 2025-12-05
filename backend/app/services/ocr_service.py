@@ -34,7 +34,7 @@ class OCRService:
         # Configuração otimizada para boletos brasileiros
         self.tesseract_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,/-:R$ '
     
-    def _preprocess_image(self, image_bytes: bytes) -> Optional[np.ndarray]:
+    def _preprocess_image(self, image_bytes: bytes):
         """
         Pré-processa imagem para melhorar qualidade do OCR.
         Aplica: escala de cinza, threshold, denoising, contraste.
