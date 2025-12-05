@@ -1237,6 +1237,343 @@ Equipe EconomizeIA
             db.commit()
         
         return sent
+    
+    async def send_monthly_report(
+        self,
+        db: Session,
+        user: User,
+        report_month: int,
+        report_year: int,
+        monthly_data: Dict[str, Any]
+    ) -> bool:
+        """Send monthly financial report to user."""
+        if not user.notif_prefs.get("email_enabled", True):
+            return False
+        
+        # Format month name
+        month_names = [
+            "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+            "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+        ]
+        month_name = month_names[report_month - 1]
+        
+        subject = f"📊 Seu Relatório Financeiro de {month_name}/{report_year} - EconomizeIA"
+        
+        # Extract data
+        total_income = monthly_data.get("total_income", 0.0)
+        total_expenses = monthly_data.get("total_expenses", 0.0)
+        balance = monthly_data.get("balance", 0.0)
+        bills_paid = monthly_data.get("bills_paid", 0)
+        bills_pending = monthly_data.get("bills_pending", 0)
+        bills_overdue = monthly_data.get("bills_overdue", 0)
+        top_categories = monthly_data.get("top_categories", [])
+        savings_goals_progress = monthly_data.get("savings_goals_progress", [])
+        comparison_previous = monthly_data.get("comparison_previous", {})
+        
+        # Calculate percentage change
+        income_change = comparison_previous.get("income_change_percent", 0.0)
+        expenses_change = comparison_previous.get("expenses_change_percent", 0.0)
+        
+        # Balance indicator
+        balance_color = "#059669" if balance >= 0 else "#dc2626"
+        balance_icon = "📈" if balance >= 0 else "📉"
+        balance_text = "Superávit" if balance >= 0 else "Déficit"
+        
+        html_body = f"""
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="color-scheme" content="light dark">
+            <meta name="supported-color-schemes" content="light dark">
+        </head>
+        <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6; line-height: 1.6;">
+            <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f3f4f6; padding: 20px 0;">
+                <tr>
+                    <td align="center" style="padding: 40px 20px;">
+                        <table role="presentation" style="max-width: 650px; width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                            
+                            <!-- Header -->
+                            <tr>
+                                <td style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 50px 40px; text-align: center;">
+                                    <img src="{settings.FRONTEND_URL or 'http://localhost:3000'}/logo.png" alt="EconomizeIA" style="max-width: 120px; height: auto; margin-bottom: 16px;" />
+                                    <h1 style="margin: 0 0 8px 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.2;">
+                                        📊 Relatório Mensal
+                                    </h1>
+                                    <p style="margin: 0; color: #d1d5db; font-size: 18px; font-weight: 400; line-height: 1.5;">
+                                        {month_name} de {report_year}
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Greeting -->
+                            <tr>
+                                <td style="padding: 40px 40px 30px 40px;">
+                                    <h2 style="margin: 0 0 12px 0; color: #111827; font-size: 24px; font-weight: 600; line-height: 1.3;">
+                                        Olá, {user.name}! 👋
+                                    </h2>
+                                    <p style="margin: 0; color: #4b5563; font-size: 16px; line-height: 1.7;">
+                                        Aqui está o resumo completo das suas finanças em {month_name}/{report_year}. 
+                                        Veja como você está se saindo e o que pode melhorar!
+                                    </p>
+                                </td>
+                            </tr>
+                            
+                            <!-- Balance Summary Card -->
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;">
+                                    <div style="background: linear-gradient(135deg, {balance_color}15 0%, {balance_color}08 100%); border-radius: 12px; padding: 30px; border: 2px solid {balance_color}40; text-align: center;">
+                                        <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                            Saldo do Mês
+                                        </p>
+                                        <p style="margin: 0; color: {balance_color}; font-size: 42px; font-weight: 700; line-height: 1.2;">
+                                            {balance_icon} R$ {abs(balance):,.2f}
+                                        </p>
+                                        <p style="margin: 8px 0 0 0; color: {balance_color}; font-size: 16px; font-weight: 600;">
+                                            {balance_text}
+                                        </p>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- Income vs Expenses -->
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;">
+                                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                        <tr>
+                                            <td style="width: 50%; padding-right: 12px; vertical-align: top;">
+                                                <div style="background-color: #ecfdf5; border-radius: 10px; padding: 24px; border-left: 4px solid #059669;">
+                                                    <p style="margin: 0 0 8px 0; color: #065f46; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                                        💰 Receitas
+                                                    </p>
+                                                    <p style="margin: 0 0 4px 0; color: #059669; font-size: 28px; font-weight: 700; line-height: 1.2;">
+                                                        R$ {total_income:,.2f}
+                                                    </p>
+                                                    {f'<p style="margin: 4px 0 0 0; color: {"#059669" if income_change >= 0 else "#dc2626"}; font-size: 13px; font-weight: 600;">{"+" if income_change >= 0 else ""}{income_change:.1f}% vs mês anterior</p>' if income_change != 0 else '<p style="margin: 4px 0 0 0; color: #6b7280; font-size: 13px;">Sem variação</p>'}
+                                                </div>
+                                            </td>
+                                            <td style="width: 50%; padding-left: 12px; vertical-align: top;">
+                                                <div style="background-color: #fef2f2; border-radius: 10px; padding: 24px; border-left: 4px solid #dc2626;">
+                                                    <p style="margin: 0 0 8px 0; color: #991b1b; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                                                        💸 Despesas
+                                                    </p>
+                                                    <p style="margin: 0 0 4px 0; color: #dc2626; font-size: 28px; font-weight: 700; line-height: 1.2;">
+                                                        R$ {total_expenses:,.2f}
+                                                    </p>
+                                                    {f'<p style="margin: 4px 0 0 0; color: {"#059669" if expenses_change <= 0 else "#dc2626"}; font-size: 13px; font-weight: 600;">{"+" if expenses_change >= 0 else ""}{expenses_change:.1f}% vs mês anterior</p>' if expenses_change != 0 else '<p style="margin: 4px 0 0 0; color: #6b7280; font-size: 13px;">Sem variação</p>'}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Bills Status -->
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;">
+                                    <h3 style="margin: 0 0 20px 0; color: #111827; font-size: 20px; font-weight: 600; line-height: 1.3;">
+                                        📋 Status dos Boletos
+                                    </h3>
+                                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                        <tr>
+                                            <td style="width: 33.33%; padding-right: 8px; vertical-align: top;">
+                                                <div style="background-color: #ecfdf5; border-radius: 8px; padding: 20px; text-align: center; border: 1px solid #a7f3d0;">
+                                                    <p style="margin: 0 0 6px 0; color: #065f46; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                                                        ✅ Pagos
+                                                    </p>
+                                                    <p style="margin: 0; color: #059669; font-size: 24px; font-weight: 700;">
+                                                        {bills_paid}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                            <td style="width: 33.33%; padding: 0 8px; vertical-align: top;">
+                                                <div style="background-color: #fef3c7; border-radius: 8px; padding: 20px; text-align: center; border: 1px solid #fde68a;">
+                                                    <p style="margin: 0 0 6px 0; color: #92400e; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                                                        ⏳ Pendentes
+                                                    </p>
+                                                    <p style="margin: 0; color: #f59e0b; font-size: 24px; font-weight: 700;">
+                                                        {bills_pending}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                            <td style="width: 33.33%; padding-left: 8px; vertical-align: top;">
+                                                <div style="background-color: #fef2f2; border-radius: 8px; padding: 20px; text-align: center; border: 1px solid #fecaca;">
+                                                    <p style="margin: 0 0 6px 0; color: #991b1b; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                                                        ⚠️ Vencidos
+                                                    </p>
+                                                    <p style="margin: 0; color: #dc2626; font-size: 24px; font-weight: 700;">
+                                                        {bills_overdue}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Top Categories -->
+                            {f'''
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;">
+                                    <h3 style="margin: 0 0 20px 0; color: #111827; font-size: 20px; font-weight: 600; line-height: 1.3;">
+                                        🏆 Top Categorias de Gastos
+                                    </h3>
+                                    <div style="background-color: #f9fafb; border-radius: 10px; padding: 24px;">
+                                        {"".join([f'''
+                                        <div style="margin-bottom: {"16px" if i < len(top_categories) - 1 else "0"};">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #374151; font-size: 15px; font-weight: 600;">{cat.get("name", "Sem categoria")}</span>
+                                                <span style="color: #111827; font-size: 16px; font-weight: 700;">R$ {cat.get("total", 0):,.2f}</span>
+                                            </div>
+                                            <div style="background-color: #e5e7eb; border-radius: 4px; height: 8px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, #dc2626 0%, #ef4444 100%); height: 100%; width: {min(100, (cat.get("total", 0) / total_expenses * 100) if total_expenses > 0 else 0):.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                        </div>
+                                        ''' for i, cat in enumerate(top_categories[:5])])}
+                                    </div>
+                                </td>
+                            </tr>
+                            ''' if top_categories else ''}
+                            
+                            <!-- Savings Goals Progress -->
+                            {f'''
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;">
+                                    <h3 style="margin: 0 0 20px 0; color: #111827; font-size: 20px; font-weight: 600; line-height: 1.3;">
+                                        🎯 Metas de Economia
+                                    </h3>
+                                    <div style="background-color: #f0f9ff; border-radius: 10px; padding: 24px; border: 1px solid #bae6fd;">
+                                        {"".join([f'''
+                                        <div style="margin-bottom: {"24px" if i < len(savings_goals_progress) - 1 else "0"};">
+                                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                                <span style="color: #0c4a6e; font-size: 15px; font-weight: 600;">{goal.get("name", "Meta")}</span>
+                                                <span style="color: #0369a1; font-size: 14px; font-weight: 600;">{goal.get("progress", 0):.1f}%</span>
+                                            </div>
+                                            <div style="background-color: #e0f2fe; border-radius: 4px; height: 10px; overflow: hidden;">
+                                                <div style="background: linear-gradient(90deg, #0284c7 0%, #0ea5e9 100%); height: 100%; width: {min(100, goal.get("progress", 0)):.1f}%; border-radius: 4px;"></div>
+                                            </div>
+                                            <p style="margin: 8px 0 0 0; color: #075985; font-size: 13px;">
+                                                R$ {goal.get("current", 0):,.2f} / R$ {goal.get("target", 0):,.2f}
+                                            </p>
+                                        </div>
+                                        ''' for i, goal in enumerate(savings_goals_progress[:3])])}
+                                    </div>
+                                </td>
+                            </tr>
+                            ''' if savings_goals_progress else ''}
+                            
+                            <!-- Insights -->
+                            <tr>
+                                <td style="padding: 0 40px 30px 40px;">
+                                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 10px; padding: 24px; border-left: 4px solid #f59e0b;">
+                                        <p style="margin: 0 0 12px 0; color: #92400e; font-size: 16px; font-weight: 600; line-height: 1.6;">
+                                            💡 Insights do Mês
+                                        </p>
+                                        <ul style="margin: 0; padding-left: 20px; color: #78350f; font-size: 14px; line-height: 1.8;">
+                                            {f'<li>Você economizou <strong>R$ {abs(balance):,.2f}</strong> este mês! Continue assim! 🎉</li>' if balance > 0 else f'<li>Você gastou <strong>R$ {abs(balance):,.2f}</strong> a mais do que recebeu. Revise seus gastos para melhorar no próximo mês.</li>'}
+                                            {f'<li>Você pagou <strong>{bills_paid}</strong> boletos com sucesso! ✅</li>' if bills_paid > 0 else ''}
+                                            {f'<li>Atenção: Você tem <strong>{bills_overdue}</strong> boletos vencidos. Priorize o pagamento! ⚠️</li>' if bills_overdue > 0 else ''}
+                                            {f'<li>Sua maior categoria de gastos foi <strong>{top_categories[0].get("name", "N/A")}</strong> com R$ {top_categories[0].get("total", 0):,.2f}.</li>' if top_categories else ''}
+                                        </ul>
+                                    </div>
+                                </td>
+                            </tr>
+                            
+                            <!-- CTA Button -->
+                            <tr>
+                                <td style="padding: 0 40px 40px 40px;">
+                                    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+                                        <tr>
+                                            <td align="center" style="padding: 0;">
+                                                <a href="{settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard" target="_blank" style="display: inline-block; padding: 16px 32px; background: linear-gradient(135deg, #1f2937 0%, #374151 100%); color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+                                                    Ver Dashboard Completo
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            
+                            <!-- Footer -->
+                            <tr>
+                                <td style="padding: 30px 40px; text-align: center; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                                    <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                                        © 2025 EconomizeIA. Todos os direitos reservados.
+                                    </p>
+                                    <p style="margin: 0; color: #9ca3af; font-size: 12px; line-height: 1.6;">
+                                        Este é um relatório automático gerado mensalmente. Você pode desativar nas configurações.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        """
+        
+        text_body = f"""
+Olá {user.name}!
+
+📊 RELATÓRIO FINANCEIRO - {month_name}/{report_year}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 RECEITAS: R$ {total_income:,.2f}
+💸 DESPESAS: R$ {total_expenses:,.2f}
+📊 SALDO: R$ {balance:,.2f} ({balance_text})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 STATUS DOS BOLETOS:
+✅ Pagos: {bills_paid}
+⏳ Pendentes: {bills_pending}
+⚠️ Vencidos: {bills_overdue}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{"🏆 TOP CATEGORIAS DE GASTOS:" if top_categories else ""}
+{chr(10).join([f"• {cat.get('name', 'Sem categoria')}: R$ {cat.get('total', 0):,.2f}" for cat in top_categories[:5]]) if top_categories else ""}
+
+{"🎯 METAS DE ECONOMIA:" if savings_goals_progress else ""}
+{chr(10).join([f"• {goal.get('name', 'Meta')}: {goal.get('progress', 0):.1f}% (R$ {goal.get('current', 0):,.2f} / R$ {goal.get('target', 0):,.2f})" for goal in savings_goals_progress[:3]]) if savings_goals_progress else ""}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 INSIGHTS:
+{'- Você economizou este mês! Continue assim! 🎉' if balance > 0 else '- Você gastou mais do que recebeu. Revise seus gastos para melhorar no próximo mês.'}
+{f'- Você pagou {bills_paid} boletos com sucesso! ✅' if bills_paid > 0 else ''}
+{f'- Atenção: Você tem {bills_overdue} boletos vencidos. Priorize o pagamento! ⚠️' if bills_overdue > 0 else ''}
+
+Acesse seu dashboard: {settings.FRONTEND_URL or 'http://localhost:3000'}/app/dashboard
+
+Atenciosamente,
+Equipe EconomizeIA
+"""
+        
+        sent = await self.send_email(user.email, subject, text_body, html_body)
+        
+        if sent:
+            # Log notification
+            notification = Notification(
+                id=uuid.uuid4(),
+                user_id=user.id,
+                type=NotificationType.RECONCILIATION,
+                channel=NotificationChannel.EMAIL,
+                sent_at=datetime.utcnow(),
+                payload={
+                    "report_month": report_month,
+                    "report_year": report_year,
+                    "monthly_data": monthly_data
+                },
+                status="sent"
+            )
+            db.add(notification)
+            db.commit()
+        
+        return sent
 
 
 notification_service = NotificationService()

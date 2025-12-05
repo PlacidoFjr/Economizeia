@@ -1,5 +1,6 @@
-from celery import shared_task
+from celery import shared_task  # type: ignore
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.db.database import SessionLocal
 from app.db.models import User, Bill, BillStatus, BillType, SavingsGoal, SavingsGoalStatus, Notification, NotificationType
 from app.services.notification_service import notification_service
@@ -7,6 +8,7 @@ import logging
 from uuid import UUID
 from datetime import datetime, date, timedelta
 from typing import List, Dict
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -285,6 +287,167 @@ def check_savings_goals_reminders():
                 
     except Exception as e:
         logger.error(f"Error in check_savings_goals_reminders: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
+@shared_task(name="send_monthly_reports")
+def send_monthly_reports():
+    """Send monthly financial reports to all users (runs on the 1st of each month)."""
+    db: Session = SessionLocal()
+    
+    try:
+        today = date.today()
+        
+        # Calculate previous month
+        if today.month == 1:
+            report_month = 12
+            report_year = today.year - 1
+        else:
+            report_month = today.month - 1
+            report_year = today.year
+        
+        # Get all active and verified users
+        users = db.query(User).filter(
+            User.is_active == True,
+            User.email_verified == True
+        ).all()
+        
+        logger.info(f"📊 Sending monthly reports for {report_month}/{report_year} to {len(users)} users")
+        
+        for user in users:
+            try:
+                # Get all bills for the report month
+                user_bills = db.query(Bill).filter(
+                    Bill.user_id == user.id,
+                    Bill.due_date.isnot(None),
+                    func.extract('month', Bill.due_date) == report_month,
+                    func.extract('year', Bill.due_date) == report_year
+                ).all()
+                
+                # Calculate totals
+                total_income = sum(
+                    float(b.amount) for b in user_bills
+                    if b.type == BillType.INCOME and b.status in [BillStatus.PAID, BillStatus.CONFIRMED]
+                ) or 0.0
+                
+                total_expenses = sum(
+                    float(b.amount) for b in user_bills
+                    if b.type == BillType.EXPENSE and b.status in [BillStatus.PAID, BillStatus.CONFIRMED]
+                ) or 0.0
+                
+                balance = total_income - total_expenses
+                
+                # Count bills by status
+                bills_paid = len([b for b in user_bills if b.status == BillStatus.PAID])
+                bills_pending = len([b for b in user_bills if b.status in [BillStatus.PENDING, BillStatus.CONFIRMED, BillStatus.SCHEDULED]])
+                bills_overdue = len([b for b in user_bills if b.status == BillStatus.OVERDUE])
+                
+                # Top categories
+                category_totals = defaultdict(float)
+                for bill in user_bills:
+                    if bill.type == BillType.EXPENSE and bill.category:
+                        category_totals[bill.category] += float(bill.amount or 0)
+                
+                top_categories = [
+                    {"name": cat, "total": total}
+                    for cat, total in sorted(category_totals.items(), key=lambda x: x[1], reverse=True)[:5]
+                ]
+                
+                # Savings goals progress
+                active_goals = db.query(SavingsGoal).filter(
+                    SavingsGoal.user_id == user.id,
+                    SavingsGoal.status == SavingsGoalStatus.ACTIVE
+                ).all()
+                
+                savings_goals_progress = [
+                    {
+                        "name": goal.name,
+                        "current": float(goal.current_amount),
+                        "target": float(goal.target_amount),
+                        "progress": (goal.current_amount / goal.target_amount * 100) if goal.target_amount > 0 else 0
+                    }
+                    for goal in active_goals[:3]
+                ]
+                
+                # Comparison with previous month
+                if report_month == 1:
+                    prev_month = 12
+                    prev_year = report_year - 1
+                else:
+                    prev_month = report_month - 1
+                    prev_year = report_year
+                
+                prev_month_bills = db.query(Bill).filter(
+                    Bill.user_id == user.id,
+                    Bill.due_date.isnot(None),
+                    func.extract('month', Bill.due_date) == prev_month,
+                    func.extract('year', Bill.due_date) == prev_year
+                ).all()
+                
+                prev_income = sum(
+                    float(b.amount) for b in prev_month_bills
+                    if b.type == BillType.INCOME and b.status in [BillStatus.PAID, BillStatus.CONFIRMED]
+                ) or 0.0
+                
+                prev_expenses = sum(
+                    float(b.amount) for b in prev_month_bills
+                    if b.type == BillType.EXPENSE and b.status in [BillStatus.PAID, BillStatus.CONFIRMED]
+                ) or 0.0
+                
+                income_change_percent = ((total_income - prev_income) / prev_income * 100) if prev_income > 0 else 0.0
+                expenses_change_percent = ((total_expenses - prev_expenses) / prev_expenses * 100) if prev_expenses > 0 else 0.0
+                
+                comparison_previous = {
+                    "income_change_percent": income_change_percent,
+                    "expenses_change_percent": expenses_change_percent
+                }
+                
+                # Check if we already sent this report (check last 7 days to avoid duplicates)
+                check_start = today - timedelta(days=7)
+                recent_report = db.query(Notification).filter(
+                    Notification.user_id == user.id,
+                    Notification.type == NotificationType.RECONCILIATION,
+                    Notification.sent_at >= check_start
+                ).first()
+                
+                if not recent_report:
+                    monthly_data = {
+                        "total_income": total_income,
+                        "total_expenses": total_expenses,
+                        "balance": balance,
+                        "bills_paid": bills_paid,
+                        "bills_pending": bills_pending,
+                        "bills_overdue": bills_overdue,
+                        "top_categories": top_categories,
+                        "savings_goals_progress": savings_goals_progress,
+                        "comparison_previous": comparison_previous
+                    }
+                    
+                    import asyncio
+                    sent = asyncio.run(
+                        notification_service.send_monthly_report(
+                            db=db,
+                            user=user,
+                            report_month=report_month,
+                            report_year=report_year,
+                            monthly_data=monthly_data
+                        )
+                    )
+                    
+                    if sent:
+                        logger.info(f"✅ Sent monthly report to user {user.id} ({user.email}) for {report_month}/{report_year}")
+                    else:
+                        logger.warning(f"⚠️ Failed to send monthly report to user {user.id} ({user.email})")
+                else:
+                    logger.info(f"⏭️ Monthly report already sent to user {user.id} for {report_month}/{report_year}, skipping")
+                    
+            except Exception as e:
+                logger.error(f"Error sending monthly report to user {user.id}: {e}", exc_info=True)
+                continue
+                
+    except Exception as e:
+        logger.error(f"Error in send_monthly_reports: {e}", exc_info=True)
     finally:
         db.close()
 

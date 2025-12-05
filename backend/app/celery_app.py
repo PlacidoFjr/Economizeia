@@ -1,4 +1,5 @@
-from celery import Celery
+from celery import Celery  # type: ignore
+from celery.schedules import crontab  # type: ignore
 from app.core.config import settings
 import os
 
@@ -30,6 +31,10 @@ celery_app.conf.update(
         'check-savings-goals-reminders-daily': {
             'task': 'check_savings_goals_reminders',
             'schedule': 86400.0,  # Run daily at midnight UTC
+        },
+        'send-monthly-reports': {
+            'task': 'send_monthly_reports',
+            'schedule': crontab(hour=9, minute=0, day_of_month=1),  # Run on 1st of each month at 9:00 UTC (6:00 BRT)
         },
     },
 )
