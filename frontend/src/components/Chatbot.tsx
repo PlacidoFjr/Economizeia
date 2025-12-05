@@ -130,11 +130,24 @@ export default function Chatbot() {
 
       // Se uma transação foi criada (despesa ou receita), invalidar queries para atualizar o dashboard
       if (response.data.action === 'expense_created' || response.data.action === 'income_created') {
-        // Invalidar queries para atualizar dados sem recarregar a página
-        queryClient.invalidateQueries({ queryKey: ['bills'] })
-        queryClient.invalidateQueries({ queryKey: ['finances'] })
-        // Também invalidar qualquer query relacionada ao dashboard
-        queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+        try {
+          // Invalidar todas as queries relacionadas
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['bills'] }),
+            queryClient.invalidateQueries({ queryKey: ['finances'] }),
+            queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+          ])
+          
+          // Forçar refetch imediato das queries críticas
+          await Promise.all([
+            queryClient.refetchQueries({ queryKey: ['bills'], exact: false }),
+            queryClient.refetchQueries({ queryKey: ['finances'], exact: false }),
+          ])
+          
+          console.log('✅ Transação criada! Queries atualizadas:', response.data.action)
+        } catch (error) {
+          console.error('Erro ao atualizar queries:', error)
+        }
       }
     } catch (error: any) {
       console.error('Erro ao chamar chatbot:', error)
