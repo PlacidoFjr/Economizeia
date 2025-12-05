@@ -13,6 +13,16 @@ import LoadingSpinner from '../components/LoadingSpinner'
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1']
 
 export default function Dashboard() {
+  // Buscar dados do usuário atual
+  const { data: currentUser } = useQuery({
+    queryKey: ['currentUser'],
+    queryFn: async () => {
+      const response = await api.get('/auth/me')
+      return response.data
+    },
+    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+  })
+
   // Buscar boletos e finanças separadamente
   const { data: bills, isLoading: isLoadingBills } = useQuery({
     queryKey: ['bills'],
@@ -261,6 +271,11 @@ export default function Dashboard() {
     <div className="space-y-4 sm:space-y-6 p-4 sm:p-6 pb-20 sm:pb-6">
       <div className="mb-4 sm:mb-6">
         <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Painel de Controle</h1>
+        {currentUser?.name && (
+          <p className="text-base sm:text-lg lg:text-xl font-semibold text-gray-700 mb-1">
+            Bem-vindo, {currentUser.name}! 👋
+          </p>
+        )}
         <p className="text-xs sm:text-sm text-gray-600">Visão geral das suas finanças</p>
       </div>
 

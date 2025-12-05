@@ -17,6 +17,7 @@ from app.core.security import (
 from app.core.config import settings
 from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
+from app.api.dependencies import get_current_user
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
