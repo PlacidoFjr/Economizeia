@@ -121,13 +121,90 @@ async def upload_bill(
         db.commit()
         
         # Process asynchronously (opcional - não quebra se Celery não estiver rodando)
+        celery_available = False
         try:
             from app.tasks.bill_tasks import process_bill_upload
             process_bill_upload.delay(str(bill.id), str(document.id))
             logger.info(f"Tarefa de processamento agendada para boleto {bill.id}")
+            celery_available = True
         except Exception as celery_error:
-            logger.warning(f"Celery não disponível, processamento será feito manualmente: {celery_error}")
-            # Não quebra o upload se Celery não estiver rodando
+            logger.warning(f"Celery não disponível, processando sincronamente: {celery_error}")
+            celery_available = False
+        
+        # Se Celery não estiver disponível, processar sincronamente
+        if not celery_available:
+            try:
+                logger.info(f"Processando OCR sincronamente para boleto {bill.id}")
+                # Processar OCR diretamente
+                ocr_text, ocr_confidence = ocr_service.extract_text(file_bytes, content_type)
+                document.ocr_text = ocr_text
+                document.ocr_confidence = ocr_confidence
+                db.commit()
+                
+                logger.info(f"OCR concluído para boleto {bill.id}. Texto extraído: {len(ocr_text)} caracteres, confiança: {ocr_confidence:.2f}")
+                
+                # Se houver texto extraído, tentar extrair campos com Ollama/Gemini
+                if ocr_text and len(ocr_text.strip()) > 10:
+                    try:
+                        import asyncio
+                        from app.services.ollama_service import ollama_service
+                        from app.services.gemini_service import get_gemini_service
+                        
+                        # Usar Gemini se disponível, senão Ollama
+                        ai_service = get_gemini_service() or ollama_service
+                        
+                        image_url = None
+                        try:
+                            object_name_clean = s3_path.split("/", 1)[1] if "/" in s3_path else s3_path
+                            image_url = storage_service.get_presigned_url(object_name_clean, expires_seconds=3600)
+                        except:
+                            pass  # URL opcional
+                        
+                        extracted = asyncio.run(
+                            ai_service.extract_bill_fields(
+                                ocr_text=ocr_text,
+                                image_url=image_url,
+                                metadata={"filename": file.filename}
+                            )
+                        )
+                        
+                        document.extracted_json = extracted
+                        
+                        # Update bill with extracted data
+                        if extracted.get("issuer"):
+                            bill.issuer = extracted["issuer"]
+                        if extracted.get("amount"):
+                            bill.amount = float(extracted["amount"])
+                        if extracted.get("due_date"):
+                            try:
+                                from datetime import datetime
+                                bill.due_date = datetime.fromisoformat(extracted["due_date"]).date()
+                            except:
+                                pass
+                        if extracted.get("barcode"):
+                            bill.barcode = extracted["barcode"]
+                        if extracted.get("currency"):
+                            bill.currency = extracted["currency"]
+                        
+                        bill.confidence = extracted.get("confidence", ocr_confidence)
+                        
+                        # Set status based on confidence
+                        if bill.confidence >= 0.9:
+                            bill.status = BillStatus.CONFIRMED
+                        else:
+                            bill.status = BillStatus.PENDING
+                        
+                        db.commit()
+                        logger.info(f"Extraction concluída para boleto {bill.id}. Confiança: {bill.confidence:.2f}")
+                    except Exception as extraction_error:
+                        logger.warning(f"Erro na extração de campos (OCR foi feito): {extraction_error}")
+                        # OCR foi feito, mas extração falhou - boleto fica pendente para revisão manual
+                else:
+                    logger.warning(f"OCR retornou pouco ou nenhum texto para boleto {bill.id}")
+                    
+            except Exception as sync_error:
+                logger.error(f"Erro ao processar OCR sincronamente: {sync_error}", exc_info=True)
+                # Não quebra o upload, mas boleto fica pendente
         
         # Audit log
         try:
