@@ -66,7 +66,7 @@ export default function BillUpload() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6 p-4 sm:p-6">
+    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6 p-4 sm:p-6 min-h-screen bg-gray-50">
       <div className="mb-4 sm:mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Enviar Boleto</h1>
         <p className="text-sm text-gray-600">Faça upload do seu boleto ou fatura para processamento automático</p>

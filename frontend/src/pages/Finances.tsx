@@ -127,7 +127,7 @@ export default function Finances() {
             )}
           </button>
           <Link
-            to="/bills/add"
+            to="/app/bills/add"
             className="flex items-center justify-center w-full sm:w-auto px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -402,7 +402,7 @@ export default function Finances() {
           <h3 className="text-lg font-semibold text-gray-900 mb-1">Nenhuma transação encontrada</h3>
           <p className="text-sm text-gray-600 mb-4">Comece adicionando sua primeira receita ou despesa</p>
           <Link
-            to="/bills/add"
+            to="/app/bills/add"
             className="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
           >
             <Plus className="w-4 h-4 mr-2" />

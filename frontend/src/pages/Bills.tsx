@@ -101,41 +101,43 @@ export default function Bills() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Meus Boletos</h1>
-          <p className="text-sm text-gray-600">Gerencie todos os seus boletos e faturas</p>
+    <div className="space-y-6 p-4 sm:p-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="flex-1">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Meus Boletos</h1>
+          <p className="text-xs sm:text-sm text-gray-600">Gerencie todos os seus boletos e faturas</p>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center px-4 py-2 border rounded-md font-semibold text-sm transition-colors ${
+            className={`flex items-center px-3 sm:px-4 py-2 border rounded-md font-semibold text-xs sm:text-sm transition-colors ${
               showFilters || hasActiveFilters
                 ? 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
-            <Filter className="w-4 h-4 mr-2" />
-            Filtros
+            <Filter className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Filtros</span>
+            <span className="sm:hidden">Filtro</span>
             {hasActiveFilters && (
-              <span className="ml-2 bg-white text-gray-900 rounded-full px-2 py-0.5 text-xs">
+              <span className="ml-1 sm:ml-2 bg-white text-gray-900 rounded-full px-1.5 sm:px-2 py-0.5 text-xs">
                 {Object.values(filters).filter(v => v !== '').length}
               </span>
             )}
           </button>
           <Link
-            to="/bills/add"
-            className="flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
+            to="/app/bills/add"
+            className="flex items-center px-3 sm:px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-xs sm:text-sm transition-colors whitespace-nowrap"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            Adicionar Despesa
+            <Plus className="w-4 h-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">Adicionar Despesa</span>
+            <span className="sm:hidden">Adicionar</span>
           </Link>
           <Link
-            to="/bills/upload"
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 font-semibold text-sm transition-colors"
+            to="/app/bills/upload"
+            className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 font-semibold text-xs sm:text-sm transition-colors whitespace-nowrap"
           >
-            <Upload className="w-4 h-4 mr-2" />
+            <Upload className="w-4 h-4 mr-1 sm:mr-2" />
             Upload
           </Link>
         </div>
@@ -423,7 +425,7 @@ export default function Bills() {
           <h3 className="text-lg font-semibold text-gray-900 mb-1">Nenhum boleto encontrado</h3>
           <p className="text-sm text-gray-600 mb-4">Comece adicionando seu primeiro boleto</p>
           <Link
-            to="/bills/upload"
+            to="/app/bills/upload"
             className="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
           >
             <Upload className="w-4 h-4 mr-2" />

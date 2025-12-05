@@ -204,7 +204,7 @@ export default function Installments() {
             Parcelados são identificados automaticamente quando há múltiplos boletos do mesmo emissor.
           </p>
           <Link
-            to="/bills/upload"
+            to="/app/bills/upload"
             className="inline-flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
           >
             <Plus className="w-4 h-4 mr-2" />
