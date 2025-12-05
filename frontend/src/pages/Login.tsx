@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../hooks/useToast'
-import { Shield, TrendingUp, Zap, Mail, Lock } from 'lucide-react'
+import { Shield, TrendingUp, Zap, Mail, Lock, ArrowLeft } from 'lucide-react'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 // Dados de exemplo para os gráficos
@@ -265,6 +265,17 @@ export default function Login() {
       {/* Lado Direito - Formulário de Login */}
       <div className="w-full lg:w-1/2 flex items-center justify-center bg-white min-h-screen px-4 sm:px-6 lg:px-8 py-8 lg:py-16 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
         <div className="max-w-md w-full space-y-6 lg:py-8">
+          {/* Botão Voltar */}
+          <div className="mb-4">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center text-gray-600 hover:text-gray-900 transition-colors group"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+              <span className="text-sm font-medium">Voltar para Home</span>
+            </button>
+          </div>
+
           {/* Logo e título - mobile otimizado */}
           <div className="text-center lg:text-left mb-8 lg:mb-6">
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-3">

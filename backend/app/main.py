@@ -1,14 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 
 from app.core.config import settings
 from app.api.v1 import auth, bills, payments, notifications, qa, chatbot, savings_goals, investments
-from app.db.database import engine, Base
+from app.db.database import engine, Base, SessionLocal
 
 # Importar modelos para garantir que sejam registrados no Base.metadata
-from app.db.models import SavingsGoal, Investment  # noqa: F401
+from app.db.models import SavingsGoal, Investment, User  # noqa: F401
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +57,38 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.delete("/api/v1/reset-all-users", tags=["Admin"])
+async def reset_all_users():
+    """
+    ⚠️ ENDPOINT TEMPORÁRIO - Deleta todos os usuários do banco de dados.
+    Use apenas para desenvolvimento/testes. Remover em produção!
+    """
+    db = SessionLocal()
+    try:
+        # Contar usuários antes
+        count_before = db.query(User).count()
+        
+        # Deletar todos os usuários (cascade vai deletar relacionamentos)
+        db.query(User).delete()
+        db.commit()
+        
+        count_after = db.query(User).count()
+        
+        logger.warning(f"⚠️ TODOS OS USUÁRIOS FORAM DELETADOS! Antes: {count_before}, Depois: {count_after}")
+        
+        return {
+            "message": f"Todos os usuários foram deletados com sucesso.",
+            "deleted_count": count_before,
+            "remaining_count": count_after
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Erro ao deletar usuários: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar usuários: {str(e)}")
+    finally:
+        db.close()
 
 
 @app.exception_handler(Exception)
