@@ -178,7 +178,10 @@ export default function Chatbot() {
       // Mensagem de erro mais amigável
       let errorText = 'Desculpe, ocorreu um erro ao processar sua mensagem.'
       
-      if (error.response?.status === 500) {
+      if (error.response?.status === 429) {
+        // Limite de uso atingido
+        errorText = error.response.data.detail || 'Limite de mensagens do chatbot atingido este mês. O limite será resetado no próximo mês.'
+      } else if (error.response?.status === 500) {
         errorText = 'O servidor de IA não está disponível no momento. Por favor, verifique se o Ollama está rodando e tente novamente em alguns instantes.'
       } else if (error.response?.data?.detail) {
         errorText = error.response.data.detail
