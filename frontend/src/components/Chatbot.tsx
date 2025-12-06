@@ -260,6 +260,18 @@ export default function Chatbot() {
             </div>
           </div>
 
+          {/* Botão de fechar adicional no mobile - mais visível e acessível */}
+          <div className="sm:hidden fixed top-16 right-4 z-20">
+            <button
+              onClick={() => setIsOpen(false)}
+              className="bg-gray-900 text-white px-4 py-2.5 rounded-lg shadow-lg font-medium text-sm flex items-center gap-2 touch-manipulation min-h-[44px] active:bg-gray-800"
+              aria-label="Fechar chatbot"
+            >
+              <X className="w-4 h-4" />
+              Fechar
+            </button>
+          </div>
+
           {/* Mensagens */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-gray-50 overscroll-contain">
             {messages.map((message) => (
