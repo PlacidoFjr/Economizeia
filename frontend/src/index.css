@@ -236,12 +236,24 @@ select {
     overflow: hidden;
     position: fixed;
     width: 100%;
+    top: 0;
+    left: 0;
   }
 
   body.chatbot-open-mobile .chatbot-container {
     /* Usar altura completa da viewport */
     height: 100vh;
     height: calc(var(--vh, 1vh) * 100);
+    max-height: 100vh;
+    position: relative;
+  }
+
+  /* Garantir que o header fique sempre visível */
+  body.chatbot-open-mobile .chatbot-container > div:first-child {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: white;
   }
 
   /* Esconder barra de navegação do navegador */
@@ -254,6 +266,12 @@ select {
     height: env(safe-area-inset-bottom, 0px);
     background: white;
     z-index: 9999;
+    pointer-events: none;
+  }
+
+  /* Garantir que o input area fique acima da barra de navegação */
+  body.chatbot-open-mobile .safe-area-bottom {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
