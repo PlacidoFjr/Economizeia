@@ -226,14 +226,14 @@ export default function Chatbot() {
       {isOpen && (
         <div className="fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:w-96 sm:h-[600px] bg-white rounded-none sm:rounded-lg shadow-xl border-0 sm:border border-gray-200 flex flex-col z-50 safe-area-inset chatbot-container">
           {/* Header */}
-          <div className="bg-gray-900 text-white p-3 sm:p-4 flex items-center justify-between safe-area-top">
+          <div className="bg-gray-900 text-white p-3 sm:p-4 flex items-center justify-between safe-area-top relative">
             <div className="flex items-center flex-1 min-w-0">
               <div className="bg-gray-800 p-1.5 sm:p-2 rounded mr-2 sm:mr-3 flex-shrink-0">
                 <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-xs sm:text-sm truncate">Assistente EconomizeIA</h3>
-                <p className="text-xs text-gray-400">Online</p>
+                <p className="text-xs text-gray-400 whitespace-nowrap">Online</p>
               </div>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-2 flex-shrink-0 ml-2">
@@ -258,18 +258,18 @@ export default function Chatbot() {
                 <X className="w-5 h-5 sm:w-4 sm:h-4 text-white" />
               </button>
             </div>
-          </div>
-
-          {/* Botão de fechar adicional no mobile - mais visível e acessível */}
-          <div className="sm:hidden fixed top-16 right-4 z-20">
-            <button
-              onClick={() => setIsOpen(false)}
-              className="bg-gray-900 text-white px-4 py-2.5 rounded-lg shadow-lg font-medium text-sm flex items-center gap-2 touch-manipulation min-h-[44px] active:bg-gray-800"
-              aria-label="Fechar chatbot"
-            >
-              <X className="w-4 h-4" />
-              Fechar
-            </button>
+            
+            {/* Botão de fechar adicional no mobile - alinhado no topo branco */}
+            <div className="sm:hidden absolute top-0 right-0 bg-white px-3 py-2 z-30">
+              <button
+                onClick={() => setIsOpen(false)}
+                className="bg-gray-900 text-white px-3 py-1.5 rounded-lg shadow-md font-medium text-xs flex items-center gap-1.5 touch-manipulation min-h-[36px] active:bg-gray-800"
+                aria-label="Fechar chatbot"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Fechar</span>
+              </button>
+            </div>
           </div>
 
           {/* Mensagens */}
