@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+﻿from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.api.dependencies import get_current_user
 from app.services.ollama_service import ollama_service
 from app.services.gemini_service import get_gemini_service
 from app.services.cache_service import cache_service
+from app.services.local_chatbot_service import local_chatbot_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -67,7 +68,30 @@ async def chat_with_assistant(
             current_user.notif_prefs = notif_prefs
             db.commit()
         
-        # Verificar limite
+        local_result = local_chatbot_service.try_handle(
+            message=chat_data.message,
+            current_user=current_user,
+            db=db,
+            conversation_history=chat_data.conversation_history or []
+        )
+        if local_result:
+            return ChatResponse(
+                response=local_result.response,
+                action=local_result.action,
+                bill_id=local_result.bill_id
+            )
+
+        if not settings.CHATBOT_AI_ENABLED:
+            return ChatResponse(
+                response=(
+                    "Ainda nao entendi esse pedido no modo economico. "
+                    "Tente perguntar sobre pendentes, vencidas, saldo do mes, proximos vencimentos "
+                    "ou registrar algo como 'gastei R$ 35 no Uber'."
+                ),
+                action="chat"
+            )
+
+        # Verificar limite apenas quando a chamada realmente vai usar IA.
         limit = PREMIUM_LIMIT if is_premium else FREE_LIMIT
         if chatbot_messages_this_month >= limit:
             remaining_days = (current_month + relativedelta(months=1) - today).days
@@ -75,8 +99,7 @@ async def chat_with_assistant(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"Limite de {limit} mensagens do chatbot atingido este mês. {'Faça upgrade para Premium para uso ilimitado.' if not is_premium else 'Limite mensal atingido.'} O limite será resetado em {remaining_days} dia(s)."
             )
-        
-        # Incrementar contador
+
         chatbot_messages_this_month += 1
         notif_prefs["chatbot_messages_this_month"] = chatbot_messages_this_month
         current_user.notif_prefs = notif_prefs
@@ -736,7 +759,7 @@ async def chat_with_assistant(
 4. Se necessário, adicione `USE_GEMINI=true` nas variáveis
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
@@ -751,7 +774,7 @@ async def chat_with_assistant(
 3. Considere fazer upgrade do plano da API do Google
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
@@ -766,7 +789,7 @@ async def chat_with_assistant(
 3. Verifique se há problemas com a API do Google
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
@@ -781,7 +804,7 @@ async def chat_with_assistant(
 3. Verifique modelos disponíveis em: https://aistudio.google.com/apikey
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
@@ -797,7 +820,7 @@ async def chat_with_assistant(
 4. Tente novamente em alguns instantes
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
@@ -814,7 +837,7 @@ async def chat_with_assistant(
 4. Tente novamente em alguns instantes
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário"""
@@ -825,7 +848,7 @@ async def chat_with_assistant(
 
 Mas posso ajudá-lo com informações rápidas:
 
-📄 **Upload de Boletos**: Acesse "Boletos" > "Upload"
+📄 **Adicionar**: registre gastos pela tela Adicionar ou pelo chat
 📊 **Dashboard**: Veja seus gastos e receitas
 🔔 **Lembretes**: Configure notificações antes dos vencimentos
 🤖 **Adicionar Despesa**: Digite "Adicionar despesa de R$ 150,50 para energia"
@@ -840,7 +863,7 @@ Tente novamente em alguns instantes ou use as funcionalidades do menu."""
 3. Baixe o modelo: `ollama pull llama3.2`
 
 **Enquanto isso, você pode:**
-📄 Fazer upload de boletos manualmente
+📄 Registrar gastos pela tela Adicionar ou pelo chat
 📊 Visualizar seu dashboard
 🔔 Configurar lembretes
 💰 Adicionar despesas via formulário
@@ -854,13 +877,13 @@ Tente novamente após iniciar o Ollama."""
 **O que posso fazer:**
 • Ajudar você a entender como usar o sistema
 • Explicar funcionalidades do EconomizeIA
-• Orientar sobre upload de boletos
+• Orientar como registrar gastos manualmente
 • Explicar como agendar pagamentos
 
 **Para adicionar despesas via chat:**
 Use comandos como:
 • "Adicionar despesa de R$ 150,50 para energia elétrica"
-• "Criar boleto de R$ 300,00 vencendo em 15/12/2024"
+• "Registrar R$ 300,00 de energia vencendo em 15/12/2024"
 
 Por favor, verifique a configuração e tente novamente em alguns instantes."""
         

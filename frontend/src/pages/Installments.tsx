@@ -1,194 +1,211 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
+import { endOfMonth, isWithinInterval, parseISO, startOfMonth } from 'date-fns'
 import api from '../services/api'
-import { Plus, CreditCard } from 'lucide-react'
-import { useState } from 'react'
+import { CalendarDays, CreditCard, Plus } from 'lucide-react'
 import { translateStatus } from '../utils/translations'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
+import MonthSelector from '../components/MonthSelector'
 
 interface InstallmentGroup {
   issuer: string
-  total_amount: number
-  total_installments: number
-  paid_installments: number
-  remaining_installments: number
-  next_due_date: string | null
-  bills: any[]
+  totalAmount: number
+  monthAmount: number
+  totalInstallments: number
+  paidInstallments: number
+  remainingInstallments: number
+  nextDueDate: string | null
+  monthItems: any[]
+  allItems: any[]
+}
+
+const formatCurrency = (value: number) =>
+  value.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+
+const parseBillDate = (bill: any) => {
+  if (!bill.due_date) return null
+  try {
+    return parseISO(bill.due_date)
+  } catch {
+    return null
+  }
 }
 
 export default function Installments() {
-  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()))
 
-  const { data: bills, isLoading } = useQuery({
-    queryKey: ['bills'],
+  const monthInterval = useMemo(() => ({
+    start: startOfMonth(selectedMonth),
+    end: endOfMonth(selectedMonth),
+  }), [selectedMonth])
+
+  const { data: bills = [], isLoading } = useQuery({
+    queryKey: ['installment-bills'],
     queryFn: async () => {
-      const response = await api.get('/bills')
+      const response = await api.get('/bills?is_bill=false')
       return response.data
     },
   })
 
-  // Agrupar boletos por emissor e identificar parcelados - memoizado
   const installmentGroups: InstallmentGroup[] = useMemo(() => {
-    const groups: InstallmentGroup[] = []
-    if (!bills) return groups
+    const grouped: Record<string, any[]> = {}
 
-    const grouped: { [key: string]: any[] } = {}
-    
-    bills.forEach((bill: any) => {
-      const issuer = bill.issuer || 'Desconhecido'
-      if (!grouped[issuer]) {
-        grouped[issuer] = []
-      }
-      grouped[issuer].push(bill)
-    })
+    bills
+      .filter((bill: any) => bill.type === 'expense')
+      .forEach((bill: any) => {
+        const issuer = bill.issuer || 'Desconhecido'
+        if (!grouped[issuer]) grouped[issuer] = []
+        grouped[issuer].push(bill)
+      })
 
-    Object.entries(grouped).forEach(([issuer, issuerBills]) => {
-      // Verificar se há múltiplos boletos do mesmo emissor (possível parcelado)
-      if (issuerBills.length > 1) {
-        const totalAmount = issuerBills.reduce((sum, b) => sum + (b.amount || 0), 0)
-        const paidBills = issuerBills.filter((b: any) => b.status === 'paid')
-        const pendingBills = issuerBills.filter((b: any) => b.status !== 'paid')
-        
-        const nextDue = pendingBills.length > 0 
-          ? pendingBills.sort((a: any, b: any) => 
-              new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime()
-            )[0]?.due_date
-          : null
-
-        groups.push({
-          issuer,
-          total_amount: totalAmount,
-          total_installments: issuerBills.length,
-          paid_installments: paidBills.length,
-          remaining_installments: pendingBills.length,
-          next_due_date: nextDue,
-          bills: issuerBills.sort((a: any, b: any) => 
-            new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime()
-          )
+    return Object.entries(grouped)
+      .map(([issuer, issuerBills]) => {
+        const allItems = [...issuerBills].sort((a: any, b: any) =>
+          new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime()
+        )
+        const monthItems = allItems.filter((bill: any) => {
+          const date = parseBillDate(bill)
+          return date ? isWithinInterval(date, monthInterval) : false
         })
-      }
-    })
-    
-    return groups
-  }, [bills])
+        const pendingItems = allItems.filter((bill: any) => bill.status !== 'paid')
+        const nextDueDate = pendingItems[0]?.due_date || null
+
+        return {
+          issuer,
+          totalAmount: allItems.reduce((sum, bill) => sum + (bill.amount || 0), 0),
+          monthAmount: monthItems.reduce((sum, bill) => sum + (bill.amount || 0), 0),
+          totalInstallments: allItems.length,
+          paidInstallments: allItems.filter((bill: any) => bill.status === 'paid').length,
+          remainingInstallments: pendingItems.length,
+          nextDueDate,
+          monthItems,
+          allItems,
+        }
+      })
+      .filter((group) => group.totalInstallments > 1 && group.monthItems.length > 0)
+      .sort((a, b) => b.monthAmount - a.monthAmount)
+  }, [bills, monthInterval])
+
+  const monthTotal = useMemo(
+    () => installmentGroups.reduce((sum, group) => sum + group.monthAmount, 0),
+    [installmentGroups]
+  )
 
   if (isLoading) {
     return <LoadingSpinner message="Carregando parcelados..." />
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-5 p-4 pb-20 sm:p-6 sm:pb-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Parcelados</h1>
-          <p className="text-sm text-gray-600">Gerencie suas compras parceladas e financiamentos</p>
+          <h1 className="text-2xl font-bold text-slate-950 lg:text-3xl">Parcelados</h1>
+          <p className="mt-1 text-sm text-slate-600">
+            Compras repetidas do mesmo emissor, com o impacto no mês selecionado.
+          </p>
         </div>
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="flex items-center px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Parcelado
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
+          <Link
+            to="/app/transactions/add"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" />
+            Adicionar
+          </Link>
+        </div>
       </div>
 
-      {showCreateForm && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Criar Novo Parcelado</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Para criar um parcelado, use o chatbot ou faça upload dos boletos. 
-            O sistema identificará automaticamente quando há múltiplos boletos do mesmo emissor.
-          </p>
-          <button
-            onClick={() => setShowCreateForm(false)}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium text-sm transition-colors"
-          >
-            Fechar
-          </button>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Impacto no mês</p>
+          <p className="mt-2 text-xl font-bold text-slate-950">{formatCurrency(monthTotal)}</p>
         </div>
-      )}
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Grupos ativos</p>
+          <p className="mt-2 text-xl font-bold text-slate-950">{installmentGroups.length}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Parcelas no mês</p>
+          <p className="mt-2 text-xl font-bold text-slate-950">
+            {installmentGroups.reduce((sum, group) => sum + group.monthItems.length, 0)}
+          </p>
+        </div>
+      </div>
 
       {installmentGroups.length > 0 ? (
         <div className="space-y-4">
-          {installmentGroups.map((group, index) => (
-            <div key={index} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              {/* Header do Grupo */}
-              <div className="bg-gray-50 border-b border-gray-200 p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <h3 className="text-base font-semibold text-gray-900 mb-1">{group.issuer}</h3>
-                    <div className="flex items-center space-x-4 text-xs text-gray-600">
-                      <span>Total: <strong className="text-gray-900">R$ {group.total_amount.toFixed(2)}</strong></span>
-                      <span>Parcelas: <strong className="text-gray-900">{group.total_installments}x</strong></span>
-                      <span className={`${group.remaining_installments > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {group.remaining_installments > 0 
-                          ? `${group.remaining_installments} restantes`
-                          : 'Quitado'}
+          {installmentGroups.map((group) => (
+            <div key={group.issuer} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-950">{group.issuer}</h3>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                      <span>Total: <strong className="text-slate-950">{formatCurrency(group.totalAmount)}</strong></span>
+                      <span>Parcelas: <strong className="text-slate-950">{group.totalInstallments}x</strong></span>
+                      <span>
+                        Pagas: <strong className="text-slate-950">{group.paidInstallments}</strong>
+                      </span>
+                      <span className={group.remainingInstallments > 0 ? 'text-amber-700' : 'text-emerald-700'}>
+                        {group.remainingInstallments > 0 ? `${group.remainingInstallments} restantes` : 'Quitado'}
                       </span>
                     </div>
                   </div>
-                  {group.next_due_date && (
-                    <div className="text-right">
-                      <p className="text-xs text-gray-600">Próximo vencimento</p>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {new Date(group.next_due_date).toLocaleDateString('pt-BR')}
-                      </p>
-                    </div>
-                  )}
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left sm:text-right">
+                    <p className="text-xs font-semibold text-slate-500">Neste mês</p>
+                    <p className="text-base font-bold text-slate-950">{formatCurrency(group.monthAmount)}</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Lista de Parcelas */}
-              <div className="p-4">
-                <div className="space-y-2">
-                  {group.bills.map((bill: any, billIndex: number) => (
+              <div className="space-y-2 p-4">
+                {group.monthItems.map((bill: any) => {
+                  const billIndex = group.allItems.findIndex((item) => item.id === bill.id)
+                  return (
                     <div
                       key={bill.id}
-                      className="flex justify-between items-center p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded transition-colors"
+                      className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center space-x-3">
-                        <div className={`p-1.5 rounded ${
-                          bill.status === 'paid' 
-                            ? 'bg-green-100' 
+                      <div className="flex items-start gap-3">
+                        <div className={`rounded-lg p-2 ${
+                          bill.status === 'paid'
+                            ? 'bg-emerald-50 text-emerald-700'
                             : bill.status === 'overdue'
-                            ? 'bg-red-100'
-                            : 'bg-yellow-100'
+                              ? 'bg-red-50 text-red-700'
+                              : 'bg-amber-50 text-amber-700'
                         }`}>
-                          <CreditCard className={`w-4 h-4 ${
-                            bill.status === 'paid' 
-                              ? 'text-green-600' 
-                              : bill.status === 'overdue'
-                              ? 'text-red-600'
-                              : 'text-yellow-600'
-                          }`} />
+                          <CreditCard className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">
-                            Parcela {billIndex + 1} de {group.total_installments}
+                          <p className="text-sm font-bold text-slate-950">
+                            Parcela {billIndex + 1} de {group.totalInstallments}
                           </p>
-                          <p className="text-xs text-gray-600">
-                            Vencimento: {bill.due_date ? new Date(bill.due_date).toLocaleDateString('pt-BR') : 'N/A'}
+                          <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-600">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            {bill.due_date ? new Date(bill.due_date).toLocaleDateString('pt-BR') : 'N/A'}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-gray-900 mb-1">
-                          R$ {bill.amount?.toFixed(2) || '0.00'}
-                        </p>
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          bill.status === 'paid' ? 'bg-green-100 text-green-800' :
-                          bill.status === 'overdue' ? 'bg-red-100 text-red-800' :
-                          bill.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                          bill.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                          'bg-yellow-100 text-yellow-800'
+                      <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                        <p className="text-sm font-bold text-slate-950">{formatCurrency(bill.amount || 0)}</p>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                          bill.status === 'paid' ? 'bg-emerald-50 text-emerald-700' :
+                          bill.status === 'overdue' ? 'bg-red-50 text-red-700' :
+                          bill.status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
+                          'bg-amber-50 text-amber-700'
                         }`}>
                           {translateStatus(bill.status)}
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
             </div>
           ))}
@@ -196,16 +213,15 @@ export default function Installments() {
       ) : (
         <EmptyState
           icon={CreditCard}
-          title="Nenhum parcelado encontrado"
-          description="Parcelados são identificados automaticamente quando há múltiplos boletos do mesmo emissor."
+          title="Nenhum parcelado neste mês"
+          description="Parcelados aparecem quando há mais de uma despesa do mesmo emissor e ao menos uma parcela vence no mês selecionado."
           action={{
-            label: "Fazer Upload de Boletos",
-            onClick: () => window.location.href = '/app/bills/upload',
-            icon: Plus
+            label: 'Adicionar despesa',
+            onClick: () => { window.location.href = '/app/transactions/add' },
+            icon: Plus,
           }}
         />
       )}
     </div>
   )
 }
-

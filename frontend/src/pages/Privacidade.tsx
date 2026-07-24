@@ -53,9 +53,9 @@ export default function Privacidade() {
 
               <h3 className="text-xl font-semibold text-gray-900 mb-3 mt-6">2.2. Dados Financeiros</h3>
               <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4 ml-4">
-                <li>Boletos e faturas enviados</li>
+                <li>Receitas, despesas, pagamentos e parcelamentos cadastrados</li>
                 <li>Valores, datas de vencimento e emissores</li>
-                <li>Códigos de barras</li>
+                <li>Observações e categorias informadas por você</li>
                 <li>Categorias de despesas</li>
                 <li>Histórico de pagamentos</li>
                 <li>Receitas cadastradas</li>
@@ -77,7 +77,7 @@ export default function Privacidade() {
               </p>
               <ul className="list-disc list-inside text-gray-700 space-y-2 mb-4 ml-4">
                 <li>Fornecer e melhorar nossos serviços de gestão financeira</li>
-                <li>Processar e extrair informações de boletos através de OCR e IA</li>
+                <li>Organizar lançamentos financeiros informados por você</li>
                 <li>Enviar notificações e lembretes de pagamento</li>
                 <li>Gerar relatórios e análises financeiras personalizadas</li>
                 <li>Garantir a segurança e prevenir fraudes</li>

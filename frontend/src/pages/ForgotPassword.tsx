@@ -17,7 +17,7 @@ export default function ForgotPassword() {
     try {
       await api.post('/auth/forgot-password', { email })
       setSuccess(true)
-    } catch (err: any) {
+    } catch {
       // Sempre mostrar sucesso para não expor emails
       setSuccess(true)
     } finally {

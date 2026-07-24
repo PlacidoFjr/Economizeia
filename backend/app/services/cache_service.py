@@ -1,142 +1,227 @@
-import redis
-import json
 import hashlib
+import json
 import logging
-from typing import Optional, Dict, Any
+import re
+import unicodedata
+from typing import Any, Dict, Optional
+
+import redis
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 class CacheService:
-    """Service for caching chatbot responses using Redis."""
-    
+    """Redis-backed cache for chatbot responses.
+
+    Cache keys are always isolated by user and schema version. Redis failures
+    are swallowed so the chatbot flow never depends on cache availability.
+    """
+
+    MUTATING_PATTERNS = [
+        "adicionar", "adiciona", "criar", "cria", "registrar", "registra",
+        "lancar", "inserir", "paguei", "gastei", "recebi", "ganhei",
+        "excluir", "apagar", "deletar", "cancelar", "editar", "alterar",
+        "confirmar", "agendar", "marcar pago", "pago", "parcelado",
+    ]
+    SIMPLE_PATTERNS = [
+        "ola", "oi", "hey", "hi", "hello", "bom dia", "boa tarde",
+        "boa noite", "tchau", "ate logo", "obrigado", "obrigada",
+        "valeu", "ajuda", "help", "como funciona", "o que voce faz",
+        "o que vc faz", "como adicionar despesa", "como fazer upload",
+        "como enviar boleto",
+    ]
+
     def __init__(self):
+        self.schema_version = settings.CHATBOT_CACHE_SCHEMA_VERSION
+        self.enabled = bool(settings.CHATBOT_CACHE_ENABLED)
+        self.redis_client = None
+
+        if not self.enabled:
+            logger.info("Chatbot cache disabled by configuration")
+            return
+
         try:
-            # Use redis.from_url() which properly parses Redis URLs
-            # Handles formats like: redis://default:password@host:port/db
             redis_url = settings.REDIS_URL
-            
-            # If URL doesn't start with redis://, add it
             if not redis_url.startswith(("redis://", "rediss://")):
                 redis_url = f"redis://{redis_url}"
-            
-            # Parse and create Redis client from URL
-            # This handles passwords, ports, and database numbers correctly
+
             self.redis_client = redis.from_url(
                 redis_url,
                 decode_responses=True,
                 socket_connect_timeout=2,
-                socket_timeout=2
+                socket_timeout=2,
             )
-            
-            # Test connection
             self.redis_client.ping()
-            self.enabled = True
             logger.info("Cache service initialized with Redis")
         except Exception as e:
             logger.warning(f"Redis not available, cache disabled: {e}")
             self.redis_client = None
             self.enabled = False
-    
-    def _generate_cache_key(self, user_id: str, message: str, context_hash: Optional[str] = None) -> str:
-        """Generate a cache key from user ID, message, and optional context."""
-        # Normalize message (lowercase, strip whitespace)
-        normalized_msg = message.lower().strip()
-        
-        # Create hash of message
-        msg_hash = hashlib.md5(normalized_msg.encode()).hexdigest()[:8]
-        
-        # Include context hash if provided
-        if context_hash:
-            return f"chatbot:cache:{user_id}:{msg_hash}:{context_hash}"
-        return f"chatbot:cache:{user_id}:{msg_hash}"
-    
-    def _is_simple_message(self, message: str) -> bool:
-        """Check if message is a simple greeting or common question that can be cached longer."""
-        simple_patterns = [
-            "olá", "ola", "oi", "hey", "hi", "hello",
-            "tchau", "até logo", "obrigado", "obrigada", "valeu",
-            "ajuda", "help", "como funciona", "o que você faz",
-            "bom dia", "boa tarde", "boa noite",
-            "obrigado", "obrigada", "valeu", "thanks"
-        ]
-        normalized = message.lower().strip()
-        return any(pattern in normalized for pattern in simple_patterns)
-    
-    def get_cached_response(self, user_id: str, message: str, context_hash: Optional[str] = None) -> Optional[str]:
-        """Get cached response if available."""
-        if not self.enabled:
-            return None
-        
-        try:
-            cache_key = self._generate_cache_key(user_id, message, context_hash)
-            cached = self.redis_client.get(cache_key)
-            if cached:
-                logger.debug(f"Cache hit for key: {cache_key[:50]}")
-                return cached
-            return None
-        except Exception as e:
-            logger.error(f"Error getting cache: {e}")
-            return None
-    
-    def set_cached_response(
-        self, 
-        user_id: str, 
-        message: str, 
-        response: str, 
+
+    def normalize_message(self, message: str) -> str:
+        normalized = unicodedata.normalize("NFKD", message or "")
+        normalized = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+        normalized = normalized.lower().strip()
+        normalized = re.sub(r"\s+", " ", normalized)
+        return normalized
+
+    def _hash(self, value: str) -> str:
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    def _generate_cache_key(
+        self,
+        user_id: str,
+        message: str,
         context_hash: Optional[str] = None,
-        ttl: Optional[int] = None
-    ):
-        """Cache a response with appropriate TTL."""
-        if not self.enabled:
-            return
-        
+        cache_type: str = "response",
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> str:
+        normalized_msg = self.normalize_message(message)
+        message_hash = self._hash(normalized_msg)[:24]
+        provider_part = self._hash(f"{provider or 'local'}:{model or 'rules'}")[:12]
+        context_part = context_hash or "global"
+        return (
+            f"chatbot:{cache_type}:{self.schema_version}:"
+            f"{user_id}:{provider_part}:{message_hash}:{context_part}"
+        )
+
+    def _is_simple_message(self, message: str) -> bool:
+        normalized = self.normalize_message(message)
+        return any(pattern in normalized for pattern in self.SIMPLE_PATTERNS)
+
+    def is_cacheable_message(
+        self,
+        message: str,
+        action: Optional[str] = None,
+        has_pending_conversation: bool = False,
+        requires_context: bool = False,
+    ) -> bool:
+        if action and action not in {"chat", "help", "financial_summary"}:
+            return False
+        if has_pending_conversation:
+            return False
+        if action == "financial_summary":
+            return True
+
+        normalized = self.normalize_message(message)
+        if any(pattern in normalized for pattern in self.MUTATING_PATTERNS):
+            return False
+        return True
+
+    def get_cached_response(
+        self,
+        user_id: str,
+        message: str,
+        context_hash: Optional[str] = None,
+        cache_type: str = "response",
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> Optional[str]:
+        if not self.enabled or not self.redis_client:
+            return None
+
         try:
-            cache_key = self._generate_cache_key(user_id, message, context_hash)
-            
-            # Determine TTL based on message type
-            if ttl is None:
-                if self._is_simple_message(message):
-                    # Simple messages cached for 1 hour
-                    ttl = 3600
-                else:
-                    # Contextual messages cached for 5 minutes
-                    ttl = 300
-            
-            self.redis_client.setex(cache_key, ttl, response)
-            logger.debug(f"Cached response for key: {cache_key[:50]} (TTL: {ttl}s)")
+            cache_key = self._generate_cache_key(
+                user_id, message, context_hash, cache_type, provider, model
+            )
+            cached = self.redis_client.get(cache_key)
+            logger.info("Chatbot cache %s", "hit" if cached else "miss")
+            return cached
         except Exception as e:
-            logger.error(f"Error setting cache: {e}")
-    
-    def invalidate_user_cache(self, user_id: str):
-        """Invalidate all cache for a specific user."""
-        if not self.enabled:
+            logger.error(f"Error getting chatbot cache: {e}")
+            return None
+
+    def set_cached_response(
+        self,
+        user_id: str,
+        message: str,
+        response: str,
+        context_hash: Optional[str] = None,
+        ttl: Optional[int] = None,
+        cache_type: str = "response",
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
+        if not self.enabled or not self.redis_client:
             return
-        
+
         try:
-            pattern = f"chatbot:cache:{user_id}:*"
+            if ttl is None:
+                ttl = (
+                    settings.CHATBOT_CACHE_CONTEXTUAL_TTL
+                    if context_hash
+                    else settings.CHATBOT_CACHE_SIMPLE_TTL
+                )
+
+            cache_key = self._generate_cache_key(
+                user_id, message, context_hash, cache_type, provider, model
+            )
+            self.redis_client.setex(cache_key, ttl, response)
+            logger.info("Chatbot cache set ttl=%s contextual=%s", ttl, bool(context_hash))
+        except Exception as e:
+            logger.error(f"Error setting chatbot cache: {e}")
+
+    def invalidate_user_cache(self, user_id: str):
+        if not self.enabled or not self.redis_client:
+            return
+
+        try:
+            pattern = f"chatbot:*:{self.schema_version}:{user_id}:*"
             keys = self.redis_client.keys(pattern)
             if keys:
                 self.redis_client.delete(*keys)
-                logger.info(f"Invalidated {len(keys)} cache entries for user {user_id}")
+            logger.info("Invalidated chatbot cache entries for user_id=%s count=%s", user_id, len(keys))
         except Exception as e:
-            logger.error(f"Error invalidating cache: {e}")
-    
+            logger.error(f"Error invalidating user chatbot cache: {e}")
+
+    def invalidate_contextual_cache(self, user_id: str):
+        self.invalidate_user_cache(user_id)
+
     def get_context_hash(self, context: Dict[str, Any]) -> str:
-        """Generate a hash from context to use in cache key."""
-        # Use only key metrics that affect response
         key_metrics = {
             "total_bills": context.get("total_bills", 0),
             "pending_bills": context.get("pending_bills", 0),
+            "confirmed_bills": context.get("confirmed_bills", 0),
+            "scheduled_bills": context.get("scheduled_bills", 0),
+            "paid_bills": context.get("paid_bills", 0),
             "overdue_bills": context.get("overdue_bills", 0),
-            "monthly_balance": round(context.get("monthly_balance", 0), 2),
-            "current_month": context.get("current_month", "")
+            "total_pending": round(float(context.get("total_pending", 0) or 0), 2),
+            "total_paid": round(float(context.get("total_paid", 0) or 0), 2),
+            "monthly_income": round(float(context.get("monthly_income", 0) or 0), 2),
+            "monthly_expenses": round(float(context.get("monthly_expenses", 0) or 0), 2),
+            "monthly_balance": round(float(context.get("monthly_balance", 0) or 0), 2),
+            "current_month": context.get("current_month", ""),
+            "last_financial_update": context.get("last_financial_update"),
+            "categories": self._compact_categories(context.get("categories", {})),
+            "next_bills": self._compact_bills(context.get("next_bills", [])),
+            "overdue_details": self._compact_bills(context.get("overdue_details", [])),
         }
-        context_str = json.dumps(key_metrics, sort_keys=True)
-        return hashlib.md5(context_str.encode()).hexdigest()[:8]
+        context_str = json.dumps(key_metrics, sort_keys=True, default=str)
+        return self._hash(context_str)[:24]
+
+    def _compact_categories(self, categories: Dict[str, Any]) -> Dict[str, Any]:
+        compact = {}
+        for category, data in sorted(categories.items())[:10]:
+            compact[category] = {
+                "total": round(float(data.get("total", 0) or 0), 2),
+                "count": int(data.get("count", 0) or 0),
+            }
+        return compact
+
+    def _compact_bills(self, bills: Any) -> Any:
+        compact = []
+        for bill in list(bills or [])[:10]:
+            compact.append({
+                "issuer": bill.get("issuer"),
+                "amount": round(float(bill.get("amount", 0) or 0), 2),
+                "due_date": bill.get("due_date"),
+                "status": bill.get("status"),
+                "category": bill.get("category"),
+            })
+        return compact
 
 
-# Global instance
 cache_service = CacheService()
-

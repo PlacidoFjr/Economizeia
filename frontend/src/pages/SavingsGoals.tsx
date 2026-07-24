@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 import { Plus, Target, Calendar, DollarSign, TrendingUp, Edit, Trash2, X, Check } from 'lucide-react'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 interface SavingsGoal {
   id: string
@@ -21,6 +22,7 @@ export default function SavingsGoals() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [addingAmountId, setAddingAmountId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     target_amount: '',
@@ -112,8 +114,14 @@ export default function SavingsGoals() {
   }
 
   const handleDelete = (id: string, name: string) => {
-    if (!confirm(`Deseja realmente excluir a meta "${name}"?`)) return
-    deleteMutation.mutate(id)
+    setPendingDelete({ id, name })
+  }
+
+  const confirmDelete = () => {
+    if (!pendingDelete) return
+    deleteMutation.mutate(pendingDelete.id, {
+      onSuccess: () => setPendingDelete(null),
+    })
   }
 
   const startEdit = (goal: SavingsGoal) => {
@@ -147,6 +155,16 @@ export default function SavingsGoals() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Excluir meta?"
+        description={`A meta "${pendingDelete?.name || 'selecionada'}" será removida junto com o progresso registrado. Essa ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={deleteMutation.isPending}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Metas de Economia</h1>

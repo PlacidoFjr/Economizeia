@@ -6,9 +6,7 @@ export function useToast() {
   if (!context) {
     // Fallback se ToastContext não estiver disponível
     return {
-      showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
-        console.log(`[Toast] ${type}: ${message}`)
-      }
+      showToast: () => undefined
     }
   }
   return context

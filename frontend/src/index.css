@@ -18,6 +18,54 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+html.dark body {
+  background-color: #020617;
+  color: #e2e8f0;
+}
+
+html.dark .text-gray-900,
+html.dark .text-slate-950 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-slate-700,
+html.dark .text-gray-600,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-gray-500,
+html.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+html.dark .bg-white,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #0f172a !important;
+}
+
+html.dark .border-gray-200,
+html.dark .border-slate-200,
+html.dark .border-gray-300,
+html.dark .border-slate-300 {
+  border-color: #334155 !important;
+}
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #020617 !important;
+  border-color: #475569 !important;
+  color: #f8fafc !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
 /* Melhorar contraste e visibilidade */
 .text-gray-900 {
   color: #111827 !important;
@@ -245,7 +293,7 @@ select {
     height: 100vh;
     height: calc(var(--vh, 1vh) * 100);
     max-height: 100vh;
-    position: relative;
+    position: fixed;
   }
 
   /* Garantir que o header fique sempre visível */
@@ -253,7 +301,7 @@ select {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: white;
+    background: #020617;
   }
 
   /* Esconder barra de navegação do navegador */
@@ -270,8 +318,38 @@ select {
   }
 
   /* Garantir que o input area fique acima da barra de navegação */
-  body.chatbot-open-mobile .safe-area-bottom {
+body.chatbot-open-mobile .safe-area-bottom {
     padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
+}
+
+html.dark .text-gray-900,
+html.dark .text-slate-950 {
+  color: #f8fafc !important;
+}
+
+html.dark .text-gray-700,
+html.dark .text-slate-700,
+html.dark .text-gray-600,
+html.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+html.dark .text-gray-500,
+html.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+html.dark .bg-white,
+html.dark .bg-slate-50,
+html.dark .bg-slate-100 {
+  background-color: #0f172a !important;
+}
+
+html.dark .border-gray-200,
+html.dark .border-slate-200,
+html.dark .border-gray-300,
+html.dark .border-slate-300 {
+  border-color: #334155 !important;
 }
 

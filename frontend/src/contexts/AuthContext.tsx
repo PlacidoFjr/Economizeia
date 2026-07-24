@@ -1,10 +1,12 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react'
 import api from '../services/api'
 
 interface User {
   id: string
   email: string
   name: string
+  email_verified?: boolean
+  is_active?: boolean
 }
 
 interface AuthContextType {
@@ -12,88 +14,70 @@ interface AuthContextType {
   token: string | null
   login: (email: string, password: string) => Promise<void>
   register: (name: string, email: string, password: string) => Promise<any>
-  logout: () => void
+  logout: () => Promise<void>
   isAuthenticated: boolean
+  isAuthLoading: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+function clearLegacyTokens() {
+  localStorage.removeItem('access_token')
+  localStorage.removeItem('refresh_token')
+  delete api.defaults.headers.common.Authorization
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(
-    localStorage.getItem('access_token')
-  )
+  const [isAuthLoading, setIsAuthLoading] = useState(true)
+
+  const loadCurrentUser = async () => {
+    const response = await api.get('/auth/me')
+    setUser(response.data)
+  }
 
   useEffect(() => {
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-      // Optionally fetch user data
-    }
-  }, [token])
+    clearLegacyTokens()
+    loadCurrentUser()
+      .catch(() => setUser(null))
+      .finally(() => setIsAuthLoading(false))
+  }, [])
 
   const login = async (email: string, password: string) => {
-    try {
-      console.log('🔐 Tentando fazer login...')
-      console.log('🔐 URL da API:', api.defaults.baseURL)
-      const response = await api.post('/auth/login', { email, password })
-      console.log('✅ Login bem-sucedido:', response.data)
-      const { access_token, refresh_token } = response.data
-      setToken(access_token)
-      localStorage.setItem('access_token', access_token)
-      localStorage.setItem('refresh_token', refresh_token)
-      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
-      // Fetch user data if needed
-    } catch (error: any) {
-      console.error('❌ Erro no login (AuthContext):', error)
-      // Re-throw para o componente tratar
-      throw error
-    }
+    await api.post('/auth/login', { email, password })
+    clearLegacyTokens()
+    await loadCurrentUser()
   }
 
   const register = async (name: string, email: string, password: string) => {
+    const response = await api.post('/auth/register', { name, email, password })
+    clearLegacyTokens()
+    return response.data
+  }
+
+  const logout = async () => {
     try {
-      console.log('📝 Tentando registrar usuário...')
-      console.log('📝 URL da API:', api.defaults.baseURL)
-      const response = await api.post('/auth/register', { name, email, password })
-      console.log('✅ Registro bem-sucedido:', response.data)
-      // Se não requer verificação, fazer login automático
-      if (response.data.access_token) {
-        const { access_token, refresh_token } = response.data
-        setToken(access_token)
-        localStorage.setItem('access_token', access_token)
-        localStorage.setItem('refresh_token', refresh_token)
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
-      }
-      // Retornar resposta para o componente decidir o que fazer
-      return response.data
-    } catch (error: any) {
-      console.error('❌ Erro no registro (AuthContext):', error)
-      throw error
+      await api.post('/auth/logout')
+    } finally {
+      clearLegacyTokens()
+      setUser(null)
     }
   }
 
-  const logout = () => {
-    setToken(null)
-    setUser(null)
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    delete api.defaults.headers.common['Authorization']
-  }
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        login,
-        register,
-        logout,
-        isAuthenticated: !!token,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo<AuthContextType>(
+    () => ({
+      user,
+      token: null,
+      login,
+      register,
+      logout,
+      isAuthenticated: !!user,
+      isAuthLoading,
+    }),
+    [user, isAuthLoading]
   )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
@@ -103,4 +87,3 @@ export function useAuth() {
   }
   return context
 }
-

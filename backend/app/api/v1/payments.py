@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, or_
 from typing import Optional
 from uuid import UUID
 from datetime import datetime, timedelta
@@ -17,6 +17,8 @@ router = APIRouter()
 @router.get("")
 async def list_payments(
     status: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -25,6 +27,24 @@ async def list_payments(
     
     if status:
         query = query.filter(Payment.status == PaymentStatus(status))
+
+    if from_date:
+        start_date = datetime.fromisoformat(from_date).date()
+        query = query.filter(
+            or_(
+                Payment.executed_date >= start_date,
+                and_(Payment.executed_date.is_(None), Payment.scheduled_date >= start_date)
+            )
+        )
+
+    if to_date:
+        end_date = datetime.fromisoformat(to_date).date()
+        query = query.filter(
+            or_(
+                Payment.executed_date <= end_date,
+                and_(Payment.executed_date.is_(None), Payment.scheduled_date <= end_date)
+            )
+        )
     
     payments = query.order_by(Payment.scheduled_date.desc()).all()
     

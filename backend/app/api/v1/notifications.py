@@ -14,7 +14,6 @@ router = APIRouter()
 
 
 class TestNotificationRequest(BaseModel):
-    user_id: Optional[str] = None
     type: str
     channel: str
 
@@ -27,13 +26,6 @@ async def test_notification(
 ):
     """Test notification sending."""
     user = current_user
-    if test_data.user_id:
-        user = db.query(User).filter(User.id == test_data.user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
     
     channel = NotificationChannel(test_data.channel)
     notif_type = NotificationType(test_data.type)
@@ -61,22 +53,11 @@ async def test_notification(
 
 @router.get("/logs")
 async def get_notification_logs(
-    user_id: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get notification logs."""
-    query = db.query(Notification)
-    
-    # Only admin can see other users' notifications
-    if user_id and user_id != str(current_user.id):
-        # In production, check admin role
-        pass
-    
-    if not user_id:
-        user_id = str(current_user.id)
-    
-    query = query.filter(Notification.user_id == user_id)
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
     notifications = query.order_by(Notification.created_at.desc()).limit(100).all()
     
     return [

@@ -13,6 +13,7 @@ from app.db.models import SavingsGoal, Investment, User  # noqa: F401
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+settings.validate_production_settings()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -41,6 +42,18 @@ def run_migrations():
                 logger.info("Migration executada com sucesso")
             else:
                 logger.info("Migration já aplicada ou coluna já é nullable")
+
+            conn.execute(text("""
+                UPDATE bills
+                SET type = lower(type)
+                WHERE type IN ('EXPENSE', 'INCOME')
+            """))
+            conn.execute(text("""
+                UPDATE bills
+                SET status = lower(status)
+                WHERE status IN ('PENDING', 'CONFIRMED', 'SCHEDULED', 'PAID', 'OVERDUE', 'CANCELLED')
+            """))
+            conn.commit()
     except Exception as e:
         logger.warning(f"Erro ao executar migration (pode ser que já esteja aplicada): {e}")
 
@@ -51,8 +64,8 @@ app = FastAPI(
     title="EconomizeIA API",
     description="Sistema de organização financeira pessoal",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    docs_url=None if settings.is_production() else "/api/docs",
+    redoc_url=None if settings.is_production() else "/api/redoc"
 )
 
 # CORS middleware
@@ -64,8 +77,8 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=[],
 )
 
 # Include routers
@@ -96,4 +109,3 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"detail": "Internal server error"}
     )
-

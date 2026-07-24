@@ -11,6 +11,7 @@ from app.db.database import get_db
 from app.db.models import User, Investment, InvestmentType
 from app.api.dependencies import get_current_user
 from app.services.audit_service import audit_service
+from app.services.cache_service import cache_service
 from fastapi import Request
 
 router = APIRouter()
@@ -79,6 +80,7 @@ async def create_investment(
     db.add(investment)
     db.commit()
     db.refresh(investment)
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -247,6 +249,7 @@ async def update_investment(
     
     db.commit()
     db.refresh(investment)
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -302,5 +305,6 @@ async def delete_investment(
     
     db.delete(investment)
     db.commit()
+    cache_service.invalidate_user_cache(str(current_user.id))
 
 

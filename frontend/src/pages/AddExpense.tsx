@@ -52,8 +52,7 @@ export default function AddExpense() {
         throw error
       }
     },
-    onSuccess: (data) => {
-      console.log('✅ Despesa/Receita criada com sucesso:', data)
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['finances'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
@@ -62,9 +61,7 @@ export default function AddExpense() {
         'success'
       )
       // Navegar para a página apropriada baseado no tipo
-      const targetPath = formData.type === 'income' ? '/app/finances' : '/app/bills'
-      console.log('Navegando para:', targetPath)
-      navigate(targetPath)
+      navigate('/app/finances')
     },
     onError: (error: any) => {
       console.error('❌ Erro na mutation:', error)
@@ -76,17 +73,19 @@ export default function AddExpense() {
 
   const validateField = (name: string, value: string): string => {
     switch (name) {
-      case 'amount':
+      case 'amount': {
         if (!value) return 'Valor é obrigatório'
         const numValue = parseFloat(value)
         if (isNaN(numValue) || numValue <= 0) return 'Valor deve ser maior que zero'
         if (numValue > 1000000000) return 'Valor muito alto'
         return ''
-      case 'due_date':
+      }
+      case 'due_date': {
         if (!value) return 'Data de vencimento é obrigatória'
         const date = new Date(value)
         if (isNaN(date.getTime())) return 'Data inválida'
         return ''
+      }
       case 'issuer':
         if (value && value.length > 255) return 'Emissor muito longo (máximo 255 caracteres)'
         return ''
@@ -170,34 +169,37 @@ export default function AddExpense() {
   const defaultDateStr = defaultDate.toISOString().split('T')[0]
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <Breadcrumbs 
         items={[
-          { label: formData.type === 'income' ? 'Finanças' : 'Boletos', to: formData.type === 'income' ? '/app/finances' : '/app/bills' },
+          { label: 'Finanças', to: '/app/finances' },
           { label: formData.type === 'income' ? 'Adicionar Receita' : 'Adicionar Despesa' }
         ]} 
       />
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+      <div className="rounded-lg bg-slate-950 p-5 text-white shadow-xl shadow-slate-300/40 sm:p-7">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+          Registro manual
+        </p>
+        <h1 className="mb-2 text-2xl font-bold sm:text-3xl">
           {formData.type === 'income' ? 'Adicionar Receita' : 'Adicionar Despesa'}
         </h1>
-        <p className="text-sm sm:text-base text-gray-600">
+        <p className="max-w-xl text-sm leading-6 text-slate-300">
           {formData.type === 'income' 
             ? 'Registre uma nova receita do mês' 
-            : 'Crie uma nova despesa manualmente'}
+            : 'Crie uma nova despesa manualmente com categoria, data e observações'}
         </p>
       </div>
 
       {/* Toggle Despesa/Receita */}
-      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 mb-6">
-        <div className="flex items-center justify-center space-x-2 sm:space-x-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
             onClick={() => setFormData({ ...formData, type: 'expense' })}
-            className={`flex items-center px-4 sm:px-6 py-2.5 sm:py-3 rounded-md font-semibold text-sm sm:text-base transition-all ${
+            className={`flex min-h-[48px] items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition-all sm:text-base ${
               formData.type === 'expense'
-                ? 'bg-red-50 text-red-700 border-2 border-red-300'
-                : 'bg-gray-50 text-gray-600 border-2 border-transparent hover:bg-gray-100'
+                ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                : 'bg-slate-50 text-gray-600 hover:bg-slate-100'
             }`}
           >
             <TrendingDown className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" />
@@ -206,10 +208,10 @@ export default function AddExpense() {
           <button
             type="button"
             onClick={() => setFormData({ ...formData, type: 'income' })}
-            className={`flex items-center px-4 sm:px-6 py-2.5 sm:py-3 rounded-md font-semibold text-sm sm:text-base transition-all ${
+            className={`flex min-h-[48px] items-center justify-center rounded-lg px-4 py-3 text-sm font-semibold transition-all sm:text-base ${
               formData.type === 'income'
-                ? 'bg-green-50 text-green-700 border-2 border-green-300'
-                : 'bg-gray-50 text-gray-600 border-2 border-transparent hover:bg-gray-100'
+                ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+                : 'bg-slate-50 text-gray-600 hover:bg-slate-100'
             }`}
           >
             <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2" />
@@ -218,7 +220,7 @@ export default function AddExpense() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 space-y-4 sm:space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:space-y-6 sm:p-6">
         {errors.submit && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-3">
             <p className="text-sm font-medium">{errors.submit}</p>
@@ -378,7 +380,7 @@ export default function AddExpense() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => navigate(formData.type === 'income' ? '/app/finances' : '/app/bills')}
+            onClick={() => navigate('/app/finances')}
             icon={X}
             className="w-full sm:w-auto"
           >

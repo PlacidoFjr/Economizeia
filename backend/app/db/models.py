@@ -1,10 +1,41 @@
 from sqlalchemy import Column, String, Integer, Float, Date, DateTime, Boolean, Text, Enum, ForeignKey, JSON
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 import enum
 from app.db.database import Base
+
+
+class EnumValueType(TypeDecorator):
+    impl = String
+    cache_ok = True
+
+    def __init__(self, enum_class, length: int = 50):
+        super().__init__(length=length)
+        self.enum_class = enum_class
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, self.enum_class):
+            return value.value
+        if isinstance(value, str):
+            return self._coerce(value).value
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        return self._coerce(value)
+
+    def _coerce(self, value: str):
+        normalized = value.lower()
+        for member in self.enum_class:
+            if member.value == normalized or member.name.lower() == normalized:
+                return member
+        raise ValueError(f"{value!r} is not a valid {self.enum_class.__name__}")
 
 
 class BillStatus(str, enum.Enum):
@@ -113,8 +144,8 @@ class Bill(Base):
     currency = Column(String(3), default="BRL")
     due_date = Column(Date, nullable=True)  # Nullable para permitir upload antes do OCR
     barcode = Column(String(255), nullable=True)
-    status = Column(Enum(BillStatus), default=BillStatus.PENDING)
-    type = Column(Enum(BillType), default=BillType.EXPENSE)  # expense ou income
+    status = Column(EnumValueType(BillStatus, length=20), default=BillStatus.PENDING)
+    type = Column(EnumValueType(BillType, length=20), default=BillType.EXPENSE)  # expense ou income
     is_bill = Column(Boolean, default=True)  # True se for boleto/documento, False se for transação manual
     confidence = Column(Float, default=0.0)
     category = Column(String(50), nullable=True)
@@ -240,4 +271,3 @@ class AuditLog(Base):
     details = Column(JSONB, nullable=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
-

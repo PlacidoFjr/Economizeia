@@ -35,6 +35,9 @@ def create_test_user(db: Session) -> User:
     # Verificar se já existe
     existing_user = db.query(User).filter(User.email == "teste@finguia.com").first()
     if existing_user:
+        if not existing_user.email_verified:
+            existing_user.email_verified = True
+            db.commit()
         print(f"Usuário de teste já existe: {existing_user.email}")
         return existing_user
     
@@ -44,6 +47,7 @@ def create_test_user(db: Session) -> User:
         email="teste@finguia.com",
         password_hash=get_password_hash("senha123"),
         phone="+5511999999999",
+        email_verified=True,
         is_active=True
     )
     db.add(user)

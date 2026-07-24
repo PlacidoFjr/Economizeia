@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { endOfMonth, format, startOfMonth } from 'date-fns'
 import api from '../services/api'
 import { Plus, DollarSign, Filter, X, Search, Trash2, TrendingUp, TrendingDown } from 'lucide-react'
 import { translateStatus, translateCategory } from '../utils/translations'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
-import Breadcrumbs from '../components/Breadcrumbs'
+import ConfirmDialog from '../components/ConfirmDialog'
+import MonthSelector from '../components/MonthSelector'
 
 const CATEGORIES = [
   { value: '', label: 'Todas as categorias' },
@@ -30,6 +32,7 @@ const STATUS_FILTERS = [
 
 export default function Finances() {
   const queryClient = useQueryClient()
+  const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()))
   const [filters, setFilters] = useState({
     category: '',
     status: '',
@@ -40,6 +43,12 @@ export default function Finances() {
   })
   const [showFilters, setShowFilters] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; issuer: string } | null>(null)
+
+  const monthRange = {
+    from: format(startOfMonth(selectedMonth), 'yyyy-MM-dd'),
+    to: format(endOfMonth(selectedMonth), 'yyyy-MM-dd'),
+  }
 
   const deleteMutation = useMutation({
     mutationFn: async (itemId: string) => {
@@ -52,13 +61,16 @@ export default function Finances() {
     },
   })
 
-  const handleDelete = async (itemId: string, issuer: string) => {
-    if (!confirm(`Deseja realmente excluir "${issuer}"?`)) {
-      return
-    }
-    setDeletingId(itemId)
+  const handleDelete = (itemId: string, issuer: string) => {
+    setPendingDelete({ id: itemId, issuer })
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    setDeletingId(pendingDelete.id)
     try {
-      await deleteMutation.mutateAsync(itemId)
+      await deleteMutation.mutateAsync(pendingDelete.id)
+      setPendingDelete(null)
     } catch (error) {
       console.error('Erro ao deletar:', error)
     } finally {
@@ -67,18 +79,19 @@ export default function Finances() {
   }
 
   const { data: finances, isLoading } = useQuery({
-    queryKey: ['finances', filters],
+    queryKey: ['finances', filters, monthRange],
     queryFn: async () => {
       const params = new URLSearchParams()
       params.append('is_bill', 'false') // Apenas transações não-boletos
       if (filters.category) params.append('category', filters.category)
       if (filters.status) params.append('status', filters.status)
       if (filters.issuer) params.append('issuer', filters.issuer)
-      if (filters.from_date) params.append('from_date', filters.from_date)
-      if (filters.to_date) params.append('to_date', filters.to_date)
+      params.append('from_date', filters.from_date || monthRange.from)
+      params.append('to_date', filters.to_date || monthRange.to)
       
       const response = await api.get(`/bills?${params.toString()}`)
-      return response.data
+      const data = response.data || []
+      return filters.type ? data.filter((item: any) => item.type === filters.type) : data
     },
   })
 
@@ -101,16 +114,26 @@ export default function Finances() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
-      <Breadcrumbs items={[{ label: 'Minhas Finanças' }]} />
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Excluir transação?"
+        description={`A transação "${pendingDelete?.issuer || 'Item'}" será removida do seu histórico financeiro. Essa ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={!!deletingId}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1">Minhas Finanças</h1>
-          <p className="text-sm text-gray-600">Gerencie receitas e despesas (não-boletos)</p>
+          <p className="text-sm text-gray-600">Gerencie receitas, despesas e confira meses anteriores.</p>
         </div>
-        <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 mt-4 sm:mt-0 w-full sm:w-auto">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <MonthSelector value={selectedMonth} onChange={setSelectedMonth} compact />
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center justify-center w-full sm:w-auto px-4 py-2 border rounded-md font-semibold text-sm transition-colors ${
+            className={`flex h-10 items-center justify-center rounded-lg border px-4 text-sm font-semibold transition-colors ${
               showFilters || hasActiveFilters
                 ? 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800'
                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
@@ -125,8 +148,8 @@ export default function Finances() {
             )}
           </button>
           <Link
-            to="/app/bills/add"
-            className="flex items-center justify-center w-full sm:w-auto px-4 py-2 bg-gray-900 text-white rounded-md hover:bg-gray-800 font-semibold text-sm transition-colors"
+            to="/app/transactions/add"
+            className="flex h-10 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition-colors hover:bg-gray-800"
           >
             <Plus className="w-4 h-4 mr-2" />
             Adicionar Transação
@@ -401,7 +424,7 @@ export default function Finances() {
           description="Comece adicionando sua primeira receita ou despesa para ter controle total das suas finanças."
           action={{
             label: "Adicionar Primeira Transação",
-            onClick: () => window.location.href = '/app/bills/add',
+            onClick: () => window.location.href = '/app/transactions/add',
             icon: Plus
           }}
         />

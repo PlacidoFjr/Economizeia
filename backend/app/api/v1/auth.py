@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import timedelta, datetime, timezone
 import logging
+from typing import Optional
 from app.db.database import get_db
 from app.db.models import User
 from app.core.security import (
@@ -17,24 +18,72 @@ from app.core.security import (
 from app.core.config import settings
 from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
+from app.services.rate_limit_service import rate_limit_service
 from app.api.dependencies import get_current_user
-from fastapi import Request
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+def _client_ip(request: Optional[Request]) -> str:
+    if not request:
+        return "unknown"
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate_limit(key: str, limit: int, window_seconds: int) -> None:
+    rate_limit_service.check(key, limit, window_seconds)
+
+
+def _is_production() -> bool:
+    return settings.is_production()
+
+
+def _cookie_options(max_age: int) -> dict:
+    production = _is_production()
+    return {
+        "httponly": True,
+        "secure": production,
+        "samesite": "none" if production else "lax",
+        "path": "/",
+        "max_age": max_age,
+    }
+
+
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    response.set_cookie(
+        "access_token",
+        access_token,
+        **_cookie_options(settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60),
+    )
+    response.set_cookie(
+        "refresh_token",
+        refresh_token,
+        **_cookie_options(settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60),
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    production = _is_production()
+    delete_options = {"path": "/", "secure": production, "samesite": "none" if production else "lax"}
+    response.delete_cookie("access_token", **delete_options)
+    response.delete_cookie("refresh_token", **delete_options)
+
+
 class UserRegister(BaseModel):
-    name: str
+    name: str = Field(min_length=2, max_length=255)
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     phone: str = None
 
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):
@@ -53,7 +102,7 @@ class ForgotPasswordRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class VerifyEmailRequest(BaseModel):
@@ -141,25 +190,18 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     credentials: UserLogin,
+    response: Response,
     db: Session = Depends(get_db),
     request: Request = None
 ):
     """Login and get JWT tokens."""
+    _check_rate_limit(f"login:{_client_ip(request)}:{credentials.email.lower()}", limit=8, window_seconds=300)
     user = db.query(User).filter(User.email == credentials.email).first()
     
-    # Verificar se o email existe primeiro
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Email não cadastrado. Verifique o email ou crie uma conta.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Se o usuário existe, verificar a senha
-    if not verify_password(credentials.password, user.password_hash):
+    if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Senha incorreta. Verifique sua senha e tente novamente.",
+            detail="Email ou senha inválidos.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -188,6 +230,7 @@ async def login(
     # Generate tokens
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    _set_auth_cookies(response, access_token, refresh_token)
     
     return TokenResponse(
         access_token=access_token,
@@ -197,11 +240,20 @@ async def login(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    token_data: RefreshTokenRequest,
+    response: Response,
+    request: Request,
+    token_data: Optional[RefreshTokenRequest] = Body(None),
     db: Session = Depends(get_db)
 ):
     """Refresh access token using refresh token."""
-    payload = decode_token(token_data.refresh_token)
+    refresh_token_value = token_data.refresh_token if token_data and token_data.refresh_token else request.cookies.get("refresh_token")
+    if not refresh_token_value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de atualização inválido"
+        )
+
+    payload = decode_token(refresh_token_value)
     
     if payload is None or payload.get("type") != "refresh":
         raise HTTPException(
@@ -221,11 +273,19 @@ async def refresh_token(
     # Generate new tokens
     access_token = create_access_token(data={"sub": str(user.id)})
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
+    _set_auth_cookies(response, access_token, refresh_token)
     
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token
     )
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response):
+    """Clear authentication cookies."""
+    _clear_auth_cookies(response)
+    return None
 
 
 @router.post("/forgot-password")
@@ -235,6 +295,7 @@ async def forgot_password(
     request: Request = None
 ):
     """Request password reset. Sends email with reset link."""
+    _check_rate_limit(f"forgot:{_client_ip(request)}:{request_data.email.lower()}", limit=3, window_seconds=900)
     user = db.query(User).filter(User.email == request_data.email).first()
     
     # Always return success to prevent email enumeration
@@ -370,9 +431,7 @@ Equipe EconomizeIA
     if email_sent:
         logger.info(f"Password reset email sent successfully to {user.email}")
     else:
-        # If email not configured, log the token (for development)
-        logger.warning(f"SMTP not configured. Reset token for {user.email}: {reset_token}")
-        logger.warning(f"Reset link: {reset_link}")
+        logger.warning(f"SMTP not configured. Password reset email was not sent to {user.email}")
     
     # Audit log
     audit_service.log_action(
@@ -394,6 +453,7 @@ async def reset_password(
     request: Request = None
 ):
     """Reset password using reset token."""
+    _check_rate_limit(f"reset:{_client_ip(request)}", limit=5, window_seconds=900)
     # Decode token
     payload = decode_token(reset_data.token)
     
@@ -426,10 +486,10 @@ async def reset_password(
         )
     
     # Validate password strength
-    if len(reset_data.new_password) < 6:
+    if len(reset_data.new_password) < 8:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A senha deve ter pelo menos 6 caracteres"
+            detail="A senha deve ter pelo menos 8 caracteres"
         )
     
     # Update password
@@ -520,6 +580,7 @@ async def resend_verification(
     request: Request = None
 ):
     """Resend verification email."""
+    _check_rate_limit(f"resend:{_client_ip(request)}:{request_data.email.lower()}", limit=3, window_seconds=900)
     user = db.query(User).filter(User.email == request_data.email).first()
     
     if not user:
@@ -568,4 +629,3 @@ async def get_current_user_info(
         email_verified=current_user.email_verified,
         is_active=current_user.is_active
     )
-

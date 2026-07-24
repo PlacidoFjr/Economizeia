@@ -7,6 +7,7 @@ from datetime import date, datetime
 from uuid import UUID
 import uuid
 import logging
+import re
 
 from app.db.database import get_db
 from app.db.models import User, Bill, BillDocument, BillStatus, BillType
@@ -15,6 +16,8 @@ from app.services.ocr_service import ocr_service
 from app.services.ollama_service import ollama_service
 from app.services.storage_service import storage_service
 from app.services.audit_service import audit_service
+from app.services.cache_service import cache_service
+from app.core.config import settings
 from app.core.security import mask_cpf_cnpj
 from app.celery_app import celery_app
 from fastapi import Request
@@ -22,6 +25,12 @@ from fastapi import Request
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _safe_filename(filename: Optional[str]) -> str:
+    clean_name = re.sub(r"[^A-Za-z0-9._-]+", "_", filename or "arquivo")
+    clean_name = clean_name.strip("._-")[:120]
+    return clean_name or "arquivo"
 
 
 class BillPreview(BaseModel):
@@ -73,6 +82,12 @@ async def upload_bill(
     request: Request = None
 ):
     """Upload a bill document (PDF/IMG) for processing."""
+    if not settings.BILL_UPLOAD_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Upload de boleto foi desativado. Registre seus gastos manualmente ou pelo assistente.",
+        )
+
     try:
         # Validate file type
         content_type = file.content_type or ""
@@ -107,7 +122,8 @@ async def upload_bill(
         db.refresh(bill)
         
         # Upload to storage
-        object_name = f"bills/{current_user.id}/{bill.id}/{file.filename}"
+        safe_filename = _safe_filename(file.filename)
+        object_name = f"bills/{current_user.id}/{bill.id}/{safe_filename}"
         try:
             s3_path = storage_service.upload_file(file_bytes, object_name, content_type)
         except Exception as storage_error:
@@ -190,7 +206,7 @@ async def upload_bill(
                                     ai_service.extract_bill_fields(
                                         ocr_text=ocr_text,
                                         image_url=image_url,
-                                        metadata={"filename": file.filename}
+                                        metadata={"filename": safe_filename}
                                     )
                                 )
                                 
@@ -276,13 +292,15 @@ async def upload_bill(
                 entity="bill",
                 action="create",
                 user_id=current_user.id,
-                details={"bill_id": str(bill.id), "filename": file.filename},
+                details={"bill_id": str(bill.id), "filename": safe_filename},
                 request=request
             )
         except Exception as audit_error:
             logger.warning(f"Erro ao criar audit log: {audit_error}")
             # Não quebra o upload se audit falhar
         
+        cache_service.invalidate_user_cache(str(current_user.id))
+
         return BillUploadResponse(
             bill_id=str(bill.id),
             preview=BillPreview(confidence=0.0, requires_manual_review=True),
@@ -362,6 +380,7 @@ async def create_bill(
     db.add(bill)
     db.commit()
     db.refresh(bill)
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -484,6 +503,7 @@ async def confirm_bill(
         bill.status = BillStatus.CANCELLED
     
     db.commit()
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -540,6 +560,7 @@ async def schedule_payment(
     
     bill.status = BillStatus.SCHEDULED
     db.commit()
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Schedule notifications
     from app.services.notification_service import notification_service
@@ -608,12 +629,14 @@ async def mark_paid(
     # Upload comprovante if provided
     if comprovante:
         file_bytes = await comprovante.read()
-        object_name = f"comprovantes/{current_user.id}/{payment.id}/{comprovante.filename}"
+        safe_filename = _safe_filename(comprovante.filename)
+        object_name = f"comprovantes/{current_user.id}/{payment.id}/{safe_filename}"
         s3_path = storage_service.upload_file(file_bytes, object_name, comprovante.content_type or "application/pdf")
         payment.comprovante_path = s3_path
     
     bill.status = BillStatus.PAID
     db.commit()
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -715,6 +738,7 @@ async def delete_bill(
     
     db.delete(bill)
     db.commit()
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     return None
 

@@ -4,9 +4,12 @@ import os
 import json
 from pathlib import Path
 
+def _is_platform_runtime() -> bool:
+    return bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RENDER_SERVICE_ID"))
+
 # Carregar .env apenas em desenvolvimento local (não no Railway/produção)
 # No Railway, as variáveis vêm das Environment Variables configuradas na plataforma
-if os.getenv("ENVIRONMENT", "development") == "development" or not os.getenv("RAILWAY_ENVIRONMENT"):
+if os.getenv("ENVIRONMENT", "development") == "development" or not _is_platform_runtime():
     try:
         from dotenv import load_dotenv  # type: ignore
         
@@ -50,6 +53,16 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     USE_GEMINI: bool = False  # Se True, usa Gemini ao invés de Ollama
     GEMINI_MODEL: str = "gemini-2.0-flash"  # Modelo rápido do Gemini (mais rápido e disponível)
+
+    # Chatbot/cache
+    CHATBOT_AI_ENABLED: bool = False  # Enquanto False, responde apenas com regras/cache/banco
+    CHATBOT_CACHE_ENABLED: bool = True
+    CHATBOT_CACHE_SIMPLE_TTL: int = 3600
+    CHATBOT_CACHE_CONTEXTUAL_TTL: int = 300
+    CHATBOT_CACHE_SCHEMA_VERSION: str = "v3"
+
+    # Bills/document upload
+    BILL_UPLOAD_ENABLED: bool = False
     
     # MinIO / S3
     MINIO_ENABLED: bool = False  # Desabilitado por padrão (não quebra se MinIO não estiver disponível)
@@ -94,7 +107,6 @@ class Settings(BaseSettings):
     def get_cors_origins(self) -> List[str]:
         """Parse CORS_ORIGINS from JSON string or comma-separated string."""
         import logging
-        import re
         logger = logging.getLogger(__name__)
         
         if not self.CORS_ORIGINS or self.CORS_ORIGINS.strip() == "":
@@ -108,18 +120,7 @@ class Settings(BaseSettings):
             parsed = json.loads(self.CORS_ORIGINS)
             if isinstance(parsed, list):
                 # Expandir wildcards do Vercel
-                expanded = []
-                for origin in parsed:
-                    if isinstance(origin, str) and "*" in origin:
-                        # Se contém wildcard, adicionar padrões comuns do Vercel
-                        if "vercel.app" in origin:
-                            expanded.append(origin.replace("*", "economizeia"))
-                            # Adicionar padrão para previews do Vercel
-                            expanded.append("https://economizeia-*.vercel.app")
-                        else:
-                            expanded.append(origin)
-                    else:
-                        expanded.append(origin)
+                expanded = [origin.strip() for origin in parsed if isinstance(origin, str) and origin.strip()]
                 logger.info(f"CORS origins (JSON list): {expanded}")
                 return expanded
             elif isinstance(parsed, str):
@@ -144,6 +145,17 @@ class Settings(BaseSettings):
         logger.warning("Retornando padrão")
         return ["http://localhost:3000", "http://localhost:5173"]
     
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production" or _is_platform_runtime()
+
+    def validate_production_settings(self) -> None:
+        if not self.is_production():
+            return
+        if self.SECRET_KEY == "dev-secret-key-change-in-production" or len(self.SECRET_KEY) < 32:
+            raise ValueError("SECRET_KEY de produção precisa ser forte e diferente do padrão de desenvolvimento.")
+        if any("*" in origin for origin in self.get_cors_origins()):
+            raise ValueError("CORS_ORIGINS de produção não deve conter wildcard.")
+
     # Frontend
     FRONTEND_URL: str = "http://localhost:3000"
     
@@ -173,4 +185,3 @@ logger.info(f"  CORS_ORIGINS: {settings.CORS_ORIGINS[:100] if len(settings.CORS_
 logger.info(f"  FRONTEND_URL: {settings.FRONTEND_URL}")
 logger.info(f"  ENVIRONMENT: {settings.ENVIRONMENT}")
 logger.info("=" * 50)
-

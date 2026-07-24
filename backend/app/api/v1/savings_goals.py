@@ -12,6 +12,7 @@ from app.db.models import User, SavingsGoal, SavingsGoalStatus
 from app.api.dependencies import get_current_user
 from app.services.notification_service import notification_service
 from app.services.audit_service import audit_service
+from app.services.cache_service import cache_service
 from fastapi import Request
 
 router = APIRouter()
@@ -81,6 +82,7 @@ async def create_savings_goal(
     db.add(goal)
     db.commit()
     db.refresh(goal)
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -231,6 +233,7 @@ async def update_savings_goal(
     
     db.commit()
     db.refresh(goal)
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -292,6 +295,7 @@ async def add_amount_to_goal(
     
     db.commit()
     db.refresh(goal)
+    cache_service.invalidate_user_cache(str(current_user.id))
     
     # Audit log
     audit_service.log_action(
@@ -346,5 +350,6 @@ async def delete_savings_goal(
     
     db.delete(goal)
     db.commit()
+    cache_service.invalidate_user_cache(str(current_user.id))
 
 

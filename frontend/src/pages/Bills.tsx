@@ -7,6 +7,7 @@ import { translateStatus, translateCategory } from '../utils/translations'
 import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 import Breadcrumbs from '../components/Breadcrumbs'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const CATEGORIES = [
   { value: '', label: 'Todas as categorias' },
@@ -39,6 +40,7 @@ export default function Bills() {
   const [showFilters, setShowFilters] = useState(false)
   const queryClient = useQueryClient()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; issuer: string } | null>(null)
 
   const deleteMutation = useMutation({
     mutationFn: async (billId: string) => {
@@ -50,13 +52,16 @@ export default function Bills() {
     },
   })
 
-  const handleDelete = async (billId: string, issuer: string) => {
-    if (!confirm(`Deseja realmente excluir o boleto "${issuer}"?`)) {
-      return
-    }
-    setDeletingId(billId)
+  const handleDelete = (billId: string, issuer: string) => {
+    setPendingDelete({ id: billId, issuer })
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    setDeletingId(pendingDelete.id)
     try {
-      await deleteMutation.mutateAsync(billId)
+      await deleteMutation.mutateAsync(pendingDelete.id)
+      setPendingDelete(null)
     } catch (error) {
       console.error('Erro ao deletar:', error)
     } finally {
@@ -98,6 +103,16 @@ export default function Bills() {
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
+      <ConfirmDialog
+        open={!!pendingDelete}
+        title="Excluir boleto?"
+        description={`O boleto "${pendingDelete?.issuer || 'Boleto'}" será removido do sistema. Essa ação não pode ser desfeita.`}
+        confirmLabel="Excluir"
+        tone="danger"
+        isLoading={!!deletingId}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+      />
       <Breadcrumbs items={[{ label: 'Meus Boletos' }]} />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex-1">
