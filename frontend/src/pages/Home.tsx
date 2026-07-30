@@ -69,7 +69,7 @@ export default function Home() {
           </Link>
           <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-4">
             <ThemeToggle className="!h-10 !min-h-10 !w-10 !min-w-10 shrink-0" />
-            <Link to="/login" className="shrink-0 px-1 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-950 sm:px-2 sm:text-base dark:text-slate-300 dark:hover:text-white">
+            <Link to="/login" className="hidden shrink-0 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-950 sm:inline-flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-white">
               Entrar
             </Link>
             <Link
