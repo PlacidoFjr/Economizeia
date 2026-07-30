@@ -36,9 +36,20 @@ const QUICK_QUESTIONS = [
 const DETAIL_SUGGESTIONS = ['Mercado', 'Uber', 'Energia', 'Farmácia']
 
 const LEGACY_STORAGE_KEY = 'economizeia_chatbot_messages_v3'
-const STORAGE_KEY_PREFIX = 'economizeia_chatbot_messages_v4'
+const LEGACY_STORAGE_PREFIX = 'economizeia_chatbot_messages_v4'
+const STORAGE_KEY_PREFIX = 'economizeia_chatbot_messages_v5'
 
-const getStorageKey = (userId?: string) => (userId ? `${STORAGE_KEY_PREFIX}:${userId}` : null)
+const getStorageKey = (user?: { id?: string; email?: string } | null) => {
+  const userKey = user?.id || user?.email
+  return userKey ? `${STORAGE_KEY_PREFIX}:${userKey}` : null
+}
+
+const clearLegacyChatStorage = () => {
+  localStorage.removeItem(LEGACY_STORAGE_KEY)
+  Object.keys(localStorage)
+    .filter((key) => key.startsWith(`${LEGACY_STORAGE_PREFIX}:`))
+    .forEach((key) => localStorage.removeItem(key))
+}
 
 // Função para carregar mensagens do localStorage
 const loadMessages = (storageKey: string | null): Message[] => {
@@ -48,13 +59,25 @@ const loadMessages = (storageKey: string | null): Message[] => {
     const saved = localStorage.getItem(storageKey)
     if (saved) {
       const parsed = JSON.parse(saved)
+      if (!Array.isArray(parsed)) return createInitialMessages()
+
       const hasLegacyContent = parsed.some((msg: any) =>
         String(msg.text || '').includes('Como posso ajudá-lo hoje?') ||
         String(msg.text || '').includes('Despesa criada com sucesso no valor de R$ 20.00')
       )
       if (hasLegacyContent) return createInitialMessages()
+
+      const cleanMessages = parsed.filter((msg: any) =>
+        msg &&
+        (msg.sender === 'user' || msg.sender === 'bot') &&
+        typeof msg.text === 'string' &&
+        msg.text.trim().length > 0
+      )
+
+      if (!cleanMessages.length) return createInitialMessages()
+
       // Converter timestamps de string para Date
-      return parsed.map((msg: any) => ({
+      return cleanMessages.map((msg: any) => ({
         ...msg,
         timestamp: new Date(msg.timestamp)
       }))
@@ -79,7 +102,7 @@ const saveMessages = (storageKey: string | null, messages: Message[]) => {
 export default function Chatbot() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const storageKey = getStorageKey(user?.id)
+  const storageKey = getStorageKey(user)
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>(createInitialMessages)
   const [inputText, setInputText] = useState('')
@@ -100,7 +123,7 @@ export default function Chatbot() {
   }, [messages])
 
   useEffect(() => {
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
+    clearLegacyChatStorage()
     skipNextSaveRef.current = true
     setMessages(loadMessages(storageKey))
   }, [storageKey])
@@ -331,7 +354,7 @@ export default function Chatbot() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 18, scale: 0.98 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="fixed inset-0 z-50 flex flex-col border-0 border-gray-200 bg-white shadow-2xl safe-area-inset chatbot-container sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[640px] sm:w-[420px] sm:rounded-lg sm:border"
+          className="chatbot-container safe-area-inset fixed inset-0 z-50 flex flex-col border-0 border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[640px] sm:w-[420px] sm:rounded-lg sm:border"
         >
           {/* Header */}
           <div className="relative flex items-center justify-between bg-slate-950 p-3 text-white safe-area-top sm:p-4">
@@ -364,23 +387,11 @@ export default function Chatbot() {
                 <X className="w-5 h-5 sm:w-4 sm:h-4 text-white" />
               </button>
             </div>
-            
-            {/* Botão de fechar adicional no mobile - alinhado no topo branco */}
-            <div className="sm:hidden absolute top-0 right-0 bg-white px-3 py-2 z-30">
-              <button
-                onClick={() => setIsOpen(false)}
-                className="bg-gray-900 text-white px-3 py-1.5 rounded-lg shadow-md font-medium text-xs flex items-center gap-1.5 touch-manipulation min-h-[36px] active:bg-gray-800"
-                aria-label="Fechar chatbot"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Fechar</span>
-              </button>
-            </div>
           </div>
 
           {/* Mensagens */}
-          <div className="flex-1 overflow-y-auto bg-slate-50 p-3 sm:p-4 space-y-3 sm:space-y-4 overscroll-contain">
-            {messages.map((message) => (
+          <div className="flex-1 overflow-y-auto bg-slate-50 p-3 sm:p-4 space-y-3 sm:space-y-4 overscroll-contain dark:bg-slate-950">
+            {messages.filter((message) => message.text.trim().length > 0).map((message) => (
               <div
                 key={message.id}
                 className={`chat-message-row flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -407,7 +418,7 @@ export default function Chatbot() {
                     className={`rounded-lg px-3 py-2 shadow-sm sm:px-3.5 sm:py-2.5 ${
                       message.sender === 'user'
                         ? 'bg-slate-950 text-white'
-                        : 'bg-white text-slate-900 border border-slate-200'
+                        : 'border border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100'
                     }`}
                   >
                     <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{message.text}</p>
@@ -424,7 +435,7 @@ export default function Chatbot() {
                             key={suggestion}
                             type="button"
                             onClick={() => handleQuickQuestion(suggestion)}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
                           >
                             {suggestion}
                           </button>
@@ -442,12 +453,12 @@ export default function Chatbot() {
                   <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gray-200 flex items-center justify-center">
                     <Bot className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-gray-700 animate-pulse" />
                   </div>
-                  <div className="bg-white rounded-lg sm:rounded-2xl px-3 py-2 sm:px-4 sm:py-3 border border-gray-200">
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900 sm:rounded-2xl sm:px-4 sm:py-3">
                     <div className="flex items-center space-x-1.5 sm:space-x-2">
                       <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                       <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                      <span className="text-[10px] sm:text-xs text-gray-500 ml-1.5 sm:ml-2">Pensando...</span>
+                      <span className="ml-1.5 text-[10px] text-gray-500 dark:text-slate-400 sm:ml-2 sm:text-xs">Pensando...</span>
                     </div>
                   </div>
                 </div>
@@ -459,8 +470,8 @@ export default function Chatbot() {
 
           {/* Perguntas rápidas */}
           {messages.length === 1 && (
-            <div className="border-t border-gray-200 bg-white px-3 py-3 sm:px-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600">
+            <div className="border-t border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-950 sm:px-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                 <WalletCards className="h-3.5 w-3.5" />
                 Atalhos úteis
               </p>
@@ -469,7 +480,7 @@ export default function Chatbot() {
                   <button
                     key={index}
                     onClick={() => handleQuickQuestion(question)}
-                    className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 touch-manipulation"
+                    className="touch-manipulation rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     {question}
                   </button>
@@ -479,7 +490,7 @@ export default function Chatbot() {
           )}
 
           {/* Input */}
-          <div className="p-3 sm:p-4 bg-white border-t border-gray-200 safe-area-bottom">
+          <div className="safe-area-bottom border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:p-4">
             <div className="flex space-x-2">
               <input
                 ref={inputRef}
@@ -488,7 +499,7 @@ export default function Chatbot() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder="Digite sua mensagem..."
-                className="min-h-[44px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 touch-manipulation"
+                className="touch-manipulation min-h-[44px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
                 disabled={isLoading}
                 autoComplete="off"
                 autoCorrect="off"

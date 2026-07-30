@@ -49,7 +49,7 @@ export default function Layout() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 justify-between">
             <div className="flex items-center">
-              <Link to="/app/dashboard" className="flex items-center px-2 text-lg font-bold text-slate-950 transition-colors hover:text-slate-700 sm:px-4 sm:text-xl dark:text-white dark:hover:text-slate-200">
+              <Link to="/app/dashboard" className="notranslate flex items-center px-2 text-lg font-bold text-slate-950 transition-colors hover:text-slate-700 sm:px-4 sm:text-xl dark:text-white dark:hover:text-slate-200" translate="no">
                 Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
               </Link>
 

@@ -121,7 +121,7 @@ export default function Register() {
           </div>
 
           <div className="mx-auto mb-6 w-full max-w-md text-center">
-            <div className="mb-4 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
+            <div className="mb-4 text-3xl font-bold tracking-tight text-slate-950 dark:text-white notranslate" translate="no">
               Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
             </div>
             <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Criar sua conta</h1>

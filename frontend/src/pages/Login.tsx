@@ -100,7 +100,7 @@ export default function Login() {
           </div>
 
           <div className="mx-auto mb-7 w-full max-w-md text-center">
-            <div className="mb-5 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
+            <div className="mb-5 text-3xl font-bold tracking-tight text-slate-950 dark:text-white notranslate" translate="no">
               Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
             </div>
             <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Entrar na sua conta</h1>

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { startOfMonth } from 'date-fns'
 import api from '../services/api'
@@ -11,7 +11,7 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner'
 import MonthSelector from '../components/MonthSelector'
 
-// Cores para os grÃ¡ficos (categorias e emissores)
+// Cores para os gráficos (categorias e emissores)
 const COLORS = ['#0f172a', '#0891b2', '#16a34a', '#f59e0b', '#ef4444', '#7c3aed', '#db2777', '#2563eb', '#0d9488', '#ea580c']
 const CATEGORY_COLORS: Record<string, string> = {
   alimentacao: '#10b981',
@@ -48,7 +48,7 @@ function ChartEmpty({ title }: { title: string }) {
     <div className="flex h-[240px] flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-center text-slate-500">
       <FileText className="mb-3 h-8 w-8 text-slate-300" />
       <p className="text-sm font-semibold text-slate-600">{title}</p>
-      <p className="mt-1 text-xs text-slate-500">Adicione lanÃ§amentos para preencher este grÃ¡fico.</p>
+      <p className="mt-1 text-xs text-slate-500">Adicione lançamentos para preencher este gráfico.</p>
     </div>
   )
 }
@@ -56,7 +56,7 @@ function ChartEmpty({ title }: { title: string }) {
 export default function Dashboard() {
   const [selectedMonth, setSelectedMonth] = useState(startOfMonth(new Date()))
 
-  // Buscar dados do usuÃ¡rio atual
+  // Buscar dados do usuário atual
   const { data: currentUser } = useQuery({
     queryKey: ['currentUser'],
     queryFn: async () => {
@@ -64,10 +64,10 @@ export default function Dashboard() {
       return response.data
     },
     staleTime: 0, // Sempre buscar dados atualizados (sem cache)
-    gcTime: 0, // NÃ£o manter cache apÃ³s desmontar
+    gcTime: 0, // Não manter cache após desmontar
   })
 
-  // Buscar boletos e finanÃ§as separadamente
+  // Buscar boletos e finanças separadamente
   const { data: bills, isLoading: isLoadingBills } = useQuery({
     queryKey: ['bills'],
     queryFn: async () => {
@@ -99,39 +99,39 @@ export default function Dashboard() {
 
   const isLoading = isLoadingBills || isLoadingFinances || isLoadingInvestments
 
-  // Processamento de dados com useMemo para otimizaÃ§Ã£o
+  // Processamento de dados com useMemo para otimização
   const { currentMonthYear, allTransactions, transactionsThisMonth, expensesThisMonth, incomeThisMonth, balanceThisMonth } = useMemo(() => {
     const currentMonth = selectedMonth.getMonth()
     const currentYear = selectedMonth.getFullYear()
 
-    // Formatar mÃªs e ano atual em portuguÃªs
+    // Formatar mês e ano atual em português
     const monthNames = [
-      'Janeiro', 'Fevereiro', 'MarÃ§o', 'Abril', 'Maio', 'Junho',
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
     ]
     const currentMonthYear = `${monthNames[currentMonth]} ${currentYear}`
 
-    // Combinar boletos e finanÃ§as para cÃ¡lculos
+    // Combinar boletos e finanças para cálculos
     const allTransactions = [...(bills || []), ...(finances || [])]
 
-    // Filtrar transaÃ§Ãµes do mÃªs atual
+    // Filtrar transações do mês atual
     const transactionsThisMonth = allTransactions?.filter((b: any) => {
       if (!b.due_date) return false
       const dueDate = new Date(b.due_date)
       return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear
     }) || []
 
-    // Calcular despesas do mÃªs (todas as transaÃ§Ãµes de despesa pagas/confirmadas)
+    // Calcular despesas do mês (todas as transações de despesa pagas/confirmadas)
     const expensesThisMonth = transactionsThisMonth
       .filter((b: any) => b.type === 'expense' && (b.status === 'paid' || b.status === 'confirmed'))
       .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
 
-    // Calcular receitas (todas as transaÃ§Ãµes de receita pagas/confirmadas)
+    // Calcular receitas (todas as transações de receita pagas/confirmadas)
     const incomeThisMonth = transactionsThisMonth
       .filter((b: any) => b.type === 'income' && (b.status === 'paid' || b.status === 'confirmed'))
       .reduce((sum: number, b: any) => sum + (b.amount || 0), 0) || 0
 
-    // Saldo do mÃªs
+    // Saldo do mês
     const balanceThisMonth = incomeThisMonth - expensesThisMonth
 
     return {
@@ -144,7 +144,7 @@ export default function Dashboard() {
     }
   }, [bills, finances, selectedMonth])
 
-  // Agrupar por categoria (usando todas as transaÃ§Ãµes) - memoizado
+  // Agrupar por categoria (usando todas as transações) - memoizado
   const categoryChartData = useMemo(() => {
     const categoryData = transactionsThisMonth.reduce((acc: any, bill: any) => {
       if (bill.type === 'expense' && (bill.status === 'paid' || bill.status === 'confirmed')) {
@@ -197,7 +197,7 @@ export default function Dashboard() {
       .slice(0, 10)
   }, [transactionsThisMonth])
 
-  // Dados mensais (Ãºltimos 6 meses) - memoizado
+  // Dados mensais (últimos 6 meses) - memoizado
   const monthlyData = useMemo(() => {
     const currentMonth = selectedMonth.getMonth()
     const currentYear = selectedMonth.getFullYear()
@@ -240,11 +240,11 @@ export default function Dashboard() {
 
     // Agrupar investimentos por tipo
     const typeLabels: { [key: string]: string } = {
-      stock: 'AÃ§Ãµes',
+      stock: 'Ações',
       fixed_income: 'Renda Fixa',
       fund: 'Fundos',
       crypto: 'Criptomoedas',
-      real_estate: 'ImÃ³veis',
+      real_estate: 'Imóveis',
       other: 'Outros'
     }
 
@@ -280,7 +280,7 @@ export default function Dashboard() {
     }
   }, [investments])
 
-  // Dados para grÃ¡fico de receitas vs despesas - memoizado
+  // Dados para gráfico de receitas vs despesas - memoizado
   const incomeVsExpenses = useMemo(() => [
     { name: 'Receitas', valor: incomeThisMonth, color: '#10b981' }, // Verde para receitas
     { name: 'Despesas', valor: expensesThisMonth, color: '#ef4444' }, // Vermelho para despesas
@@ -330,7 +330,7 @@ export default function Dashboard() {
                 {currentUser?.name ? `Bem-vindo, ${currentUser.name}.` : 'Painel de Controle'}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-                VisÃ£o geral do mÃªs com receitas, despesas, pendÃªncias e evoluÃ§Ã£o das suas finanÃ§as.
+                Visão geral do mês com receitas, despesas, pendências e evolução das suas finanças.
               </p>
             </div>
             <div className="flex flex-col gap-3">
@@ -338,7 +338,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-md border border-white/10 bg-white/8 px-3 py-2 backdrop-blur">
                   <p className="text-lg font-bold text-white">{transactionsThisMonth.length}</p>
-                  <p className="text-[11px] text-slate-400">lanÃ§amentos</p>
+                  <p className="text-[11px] text-slate-400">lançamentos</p>
                 </div>
                 <div className="rounded-md border border-white/10 bg-white/8 px-3 py-2 backdrop-blur">
                   <p className="text-lg font-bold text-white">{pendingBills.length}</p>
@@ -359,7 +359,7 @@ export default function Dashboard() {
         <div className="bg-white border border-green-200 p-4 sm:p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Receitas do MÃªs</p>
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Receitas do Mês</p>
               <p className="text-lg sm:text-xl font-bold text-green-700 truncate">R$ {incomeThisMonth.toFixed(2)}</p>
               <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">{currentMonthYear}</p>
             </div>
@@ -372,7 +372,7 @@ export default function Dashboard() {
         <div className="bg-white border border-red-200 p-4 sm:p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Despesas do MÃªs</p>
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Despesas do Mês</p>
               <p className="text-lg sm:text-xl font-bold text-red-700 truncate">R$ {expensesThisMonth.toFixed(2)}</p>
               <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">{currentMonthYear}</p>
             </div>
@@ -385,7 +385,7 @@ export default function Dashboard() {
         <div className={`bg-white border ${balanceThisMonth >= 0 ? 'border-green-200' : 'border-red-200'} p-4 sm:p-5 rounded-lg shadow-sm hover:shadow-md transition-shadow`}>
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Saldo do MÃªs</p>
+              <p className="text-[10px] sm:text-xs font-medium text-gray-600 mb-0.5 sm:mb-1">Saldo do Mês</p>
               <p className={`text-lg sm:text-xl font-bold truncate ${balanceThisMonth >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                 R$ {balanceThisMonth.toFixed(2)}
               </p>
@@ -413,7 +413,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* GrÃ¡ficos Principais */}
+      {/* Gráficos Principais */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
         {/* Receitas vs Despesas */}
         <div className={chartCardClass}>
@@ -467,11 +467,11 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
 
-        {/* DistribuiÃ§Ã£o por Categoria */}
+        {/* Distribuição por Categoria */}
         <div className={chartCardClass}>
           <div className="mb-4">
             <h3 className="text-sm font-bold text-slate-950">Gastos por Categoria</h3>
-            <p className="mt-1 text-xs text-slate-500">DistribuiÃ§Ã£o de {currentMonthYear}</p>
+            <p className="mt-1 text-xs text-slate-500">Distribuição de {currentMonthYear}</p>
           </div>
           {categoryChartData.length > 0 ? (
             <>
@@ -539,10 +539,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* GrÃ¡ficos de Investimentos */}
+      {/* Gráficos de Investimentos */}
       {investments && investments.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-          {/* DistribuiÃ§Ã£o de Investimentos por Tipo */}
+          {/* Distribuição de Investimentos por Tipo */}
           <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4 shadow-sm">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
               <h3 className="text-xs sm:text-sm font-semibold text-gray-900">
@@ -635,7 +635,7 @@ export default function Dashboard() {
               </div>
               <div className={`border rounded-lg p-4 ${totalProfitLoss >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                 <p className="text-xs font-medium mb-1" style={{ color: totalProfitLoss >= 0 ? '#065f46' : '#991b1b' }}>
-                  {totalProfitLoss >= 0 ? 'Lucro' : 'PrejuÃ­zo'}
+                  {totalProfitLoss >= 0 ? 'Lucro' : 'Prejuízo'}
                 </p>
                 <div className="flex items-baseline space-x-2">
                   <p className={`text-2xl font-bold ${totalProfitLoss >= 0 ? 'text-green-900' : 'text-red-900'}`}>
@@ -655,13 +655,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* GrÃ¡ficos SecundÃ¡rios */}
+      {/* Gráficos Secundários */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-        {/* EvoluÃ§Ã£o Mensal - Receitas e Despesas */}
+        {/* Evolução Mensal - Receitas e Despesas */}
         <div className={chartCardClass}>
           <div className="mb-4">
-            <h3 className="text-sm font-bold text-slate-950">EvoluÃ§Ã£o Financeira</h3>
-            <p className="mt-1 text-xs text-slate-500">Ãšltimos 6 meses</p>
+            <h3 className="text-sm font-bold text-slate-950">Evolução Financeira</h3>
+            <p className="mt-1 text-xs text-slate-500">Últimos 6 meses</p>
           </div>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={monthlyData} margin={{ top: 14, right: 8, left: 2, bottom: 0 }}>
@@ -799,7 +799,7 @@ export default function Dashboard() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
           <div className="flex items-center mb-3">
             <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
-            <h3 className="text-sm font-semibold text-red-900">AtenÃ§Ã£o: contas vencidas</h3>
+            <h3 className="text-sm font-semibold text-red-900">Atenção: contas vencidas</h3>
           </div>
           <ul className="space-y-2">
             {overdueBills.slice(0, 5).map((bill: any) => (
@@ -819,7 +819,7 @@ export default function Dashboard() {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 p-4">
           <h2 className="text-sm font-semibold text-gray-900">
-            LanÃ§amentos Recentes
+            Lançamentos Recentes
           </h2>
         </div>
         <div className="p-4">
@@ -851,7 +851,7 @@ export default function Dashboard() {
           ) : (
             <div className="text-center py-8">
               <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">Nenhum lanÃ§amento encontrado</p>
+              <p className="text-sm text-gray-500">Nenhum lançamento encontrado</p>
             </div>
           )}
         </div>

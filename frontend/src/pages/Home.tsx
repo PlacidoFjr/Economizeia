@@ -64,7 +64,7 @@ export default function Home() {
     <div className="min-h-screen bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
       <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/92 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="text-xl font-bold text-slate-950 sm:text-2xl dark:text-white">
+          <Link to="/" className="notranslate text-xl font-bold text-slate-950 sm:text-2xl dark:text-white" translate="no">
             Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-4">
