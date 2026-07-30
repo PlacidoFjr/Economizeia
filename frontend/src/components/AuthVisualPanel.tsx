@@ -9,7 +9,7 @@ const ITEMS = [
 
 export default function AuthVisualPanel() {
   return (
-    <aside className="relative hidden min-h-[560px] overflow-hidden lg:block">
+    <aside className="relative hidden min-h-screen overflow-hidden lg:block">
       <div
         className="absolute inset-0 scale-[1.02] bg-cover bg-center"
         style={{
@@ -21,7 +21,7 @@ export default function AuthVisualPanel() {
       <div className="absolute inset-0 bg-gradient-to-br from-slate-950/78 via-slate-950/36 to-slate-950/78" />
       <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
 
-      <div className="relative z-10 flex h-full min-h-[560px] flex-col items-center justify-between p-8 text-white xl:p-10">
+      <div className="relative z-10 flex h-full min-h-screen flex-col items-center justify-between p-8 text-white xl:p-12">
         <div className="self-start text-2xl font-bold tracking-tight">
           Economize<span className="text-cyan-300">IA</span>
         </div>

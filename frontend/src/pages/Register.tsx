@@ -101,14 +101,14 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-8 dark:bg-slate-950 sm:px-6 lg:py-10">
+    <div className="min-h-screen bg-white dark:bg-slate-950">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: 'easeOut' }}
-        className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/20 lg:min-h-[620px] lg:grid-cols-[0.96fr_1.04fr]"
+        className="grid min-h-screen w-full overflow-hidden bg-white dark:bg-slate-900 lg:grid-cols-[minmax(480px,0.9fr)_1.1fr]"
       >
-        <div className="flex flex-col justify-center px-6 py-7 sm:px-10 lg:px-12">
+        <div className="flex min-h-screen flex-col justify-center bg-white px-6 py-8 dark:bg-slate-900 sm:px-10 lg:px-16">
           <div className="mb-6 flex items-center justify-between gap-3">
             <button
               onClick={() => navigate('/')}
