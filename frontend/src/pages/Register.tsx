@@ -35,12 +35,13 @@ export default function Register() {
     if (
       backendMessage.includes('conectar') ||
       backendMessage.includes('timeout') ||
+      backendMessage.includes('Failed to fetch') ||
       backendMessage.includes('Network Error') ||
       backendMessage.includes('API não configurada') ||
       err.code === 'ECONNABORTED' ||
       err.code === 'ERR_NETWORK'
     ) {
-      return 'Sem conexão com a internet ou servidor indisponível. Verifique sua conexão e tente novamente.'
+      return 'Não foi possível conectar ao servidor. Confira a URL da API, CORS do Render ou aguarde o backend acordar.'
     }
     if (statusCode === 400) return backendMessage || 'Dados inválidos. Verifique os campos.'
     if (statusCode === 409) return 'Este email já está cadastrado. Tente fazer login.'
@@ -55,12 +56,16 @@ export default function Register() {
     if (!API_BASE_URL.startsWith('http')) return
 
     const baseUrl = API_BASE_URL.replace('/api/v1', '').replace(/\/$/, '')
-    const response = await fetch(`${baseUrl}/health`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000),
-    })
-    if (!response.ok) {
-      throw new Error('Backend não está respondendo corretamente')
+    try {
+      const response = await fetch(`${baseUrl}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(8000),
+      })
+      if (!response.ok) {
+        throw new Error('Backend não está respondendo corretamente')
+      }
+    } catch {
+      throw new Error('Não foi possível conectar ao servidor. Confira a URL da API, CORS do Render ou aguarde o backend acordar.')
     }
   }
 
@@ -96,15 +101,15 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 px-4 py-5 dark:bg-slate-950 sm:px-6 lg:py-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-8 dark:bg-slate-950 sm:px-6 lg:py-10">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: 'easeOut' }}
-        className="mx-auto grid min-h-[calc(100vh-2.5rem)] max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none lg:min-h-[560px] lg:grid-cols-[0.95fr_1.05fr]"
+        className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/20 lg:min-h-[620px] lg:grid-cols-[0.96fr_1.04fr]"
       >
-        <div className="flex flex-col justify-center px-6 py-5 sm:px-10">
-          <div className="mb-5 flex items-center justify-between gap-3">
+        <div className="flex flex-col justify-center px-6 py-7 sm:px-10 lg:px-12">
+          <div className="mb-6 flex items-center justify-between gap-3">
             <button
               onClick={() => navigate('/')}
               className="group flex items-center text-sm font-medium text-slate-600 transition-colors hover:text-slate-950 dark:text-slate-300 dark:hover:text-white"
@@ -115,8 +120,8 @@ export default function Register() {
             <ThemeToggle />
           </div>
 
-          <div className="mb-5 text-center">
-            <div className="mb-4 text-3xl font-bold text-slate-950 dark:text-white">
+          <div className="mx-auto mb-6 w-full max-w-md text-center">
+            <div className="mb-4 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
               Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
             </div>
             <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Criar sua conta</h1>
@@ -143,7 +148,7 @@ export default function Register() {
             </div>
           )}
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
+          <form className="mx-auto w-full max-w-md space-y-4" onSubmit={handleSubmit}>
             <div>
               <AuthInput
                 id="name"

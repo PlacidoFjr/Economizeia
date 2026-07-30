@@ -80,14 +80,14 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 px-4 py-5 dark:bg-slate-950 sm:px-6 lg:py-4">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 px-4 py-8 dark:bg-slate-950 sm:px-6 lg:py-10">
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: 'easeOut' }}
-        className="mx-auto grid min-h-[calc(100vh-2.5rem)] max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl shadow-slate-200/70 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none lg:min-h-[560px] lg:grid-cols-[0.95fr_1.05fr]"
+        className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/50 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/20 lg:min-h-[560px] lg:grid-cols-[0.96fr_1.04fr]"
       >
-        <div className="flex flex-col justify-center px-6 py-6 sm:px-10">
+        <div className="flex flex-col justify-center px-6 py-7 sm:px-10 lg:px-12">
           <div className="mb-6 flex items-center justify-between gap-3">
             <button
               onClick={() => navigate('/')}
@@ -99,15 +99,15 @@ export default function Login() {
             <ThemeToggle />
           </div>
 
-          <div className="mb-7 text-center">
-            <div className="mb-5 text-3xl font-bold text-slate-950 dark:text-white">
+          <div className="mx-auto mb-7 w-full max-w-md text-center">
+            <div className="mb-5 text-3xl font-bold tracking-tight text-slate-950 dark:text-white">
               Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
             </div>
             <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Entrar na sua conta</h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">Continue acompanhando suas finanças.</p>
           </div>
 
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form className="mx-auto w-full max-w-md space-y-5" onSubmit={handleSubmit}>
             <div>
               <AuthInput
                 id="email"

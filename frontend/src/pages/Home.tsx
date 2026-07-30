@@ -17,7 +17,7 @@ const FEATURES = [
   {
     icon: Bot,
     title: 'Chat financeiro econômico',
-    description: 'Responde consultas comuns com regras, cache e dados reais antes de recorrer a APIs pagas.',
+    description: 'Responde dúvidas do dia a dia e ajuda a registrar gastos, receitas e contas com rapidez.',
   },
   {
     icon: WalletCards,
@@ -42,7 +42,7 @@ const FEATURES = [
   {
     icon: Shield,
     title: 'Privacidade por padrão',
-    description: 'Cache e respostas são isolados por usuário, sem misturar dados sensíveis.',
+    description: 'Cada conta mantém suas informações separadas, com acesso protegido e controle individual.',
   },
 ]
 
@@ -99,7 +99,7 @@ export default function Home() {
               Controle suas finanças sem depender de crédito de IA para tudo.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg dark:text-slate-300">
-              O EconomizeIA reúne despesas, receitas, contas, metas, investimentos e um assistente que resolve a maioria das perguntas usando cache, regras e seus próprios dados.
+              O EconomizeIA reúne despesas, receitas, contas, metas, investimentos e um assistente para acompanhar sua rotina financeira com clareza.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
