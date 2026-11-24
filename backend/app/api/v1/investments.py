@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 from datetime import date, datetime
 from uuid import UUID
 import uuid
@@ -25,6 +25,7 @@ class InvestmentCreate(BaseModel):
     ticker: Optional[str] = None
     notes: Optional[str] = None
     current_value: Optional[float] = None
+    scope: Literal['personal', 'business'] = 'personal'
 
 
 class InvestmentUpdate(BaseModel):
@@ -73,7 +74,8 @@ async def create_investment(
         purchase_date=purchase_date,
         institution=investment_data.institution,
         ticker=investment_data.ticker,
-        notes=investment_data.notes
+        notes=investment_data.notes,
+        scope=investment_data.scope
     )
     
     db.add(investment)
@@ -93,6 +95,7 @@ async def create_investment(
     return {
         "id": str(investment.id),
         "name": investment.name,
+        "scope": investment.scope,
         "type": investment.type.value,
         "amount_invested": investment.amount_invested,
         "current_value": investment.current_value,
@@ -105,12 +108,15 @@ async def create_investment(
 @router.get("")
 async def list_investments(
     type_filter: Optional[str] = None,
+    scope: Optional[Literal['personal', 'business']] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Listar todos os investimentos do usuário."""
     query = db.query(Investment).filter(Investment.user_id == current_user.id)
     
+    if scope:
+        query = query.filter(Investment.scope == scope)
     if type_filter:
         try:
             investment_type = InvestmentType(type_filter)
@@ -131,6 +137,7 @@ async def list_investments(
         result.append({
             "id": str(inv.id),
             "name": inv.name,
+            "scope": inv.scope,
             "type": inv.type.value,
             "amount_invested": inv.amount_invested,
             "current_value": inv.current_value,
@@ -171,6 +178,7 @@ async def get_investment(
     return {
         "id": str(investment.id),
         "name": investment.name,
+        "scope": investment.scope,
         "type": investment.type.value,
         "amount_invested": investment.amount_invested,
         "current_value": investment.current_value,
@@ -264,6 +272,7 @@ async def update_investment(
     return {
         "id": str(investment.id),
         "name": investment.name,
+        "scope": investment.scope,
         "type": investment.type.value,
         "amount_invested": investment.amount_invested,
         "current_value": investment.current_value,

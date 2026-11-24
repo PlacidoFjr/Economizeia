@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from typing import Optional
+from typing import Optional, Literal
 from uuid import UUID
 from datetime import datetime, timedelta
 
@@ -17,12 +17,15 @@ router = APIRouter()
 @router.get("")
 async def list_payments(
     status: Optional[str] = None,
+    scope: Optional[Literal['personal', 'business']] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List payments."""
     query = db.query(Payment).filter(Payment.user_id == current_user.id)
     
+    if scope:
+        query = query.join(Bill).filter(Bill.scope == scope)
     if status:
         query = query.filter(Payment.status == PaymentStatus(status))
     

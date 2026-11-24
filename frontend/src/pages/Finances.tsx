@@ -71,6 +71,7 @@ export default function Finances() {
     queryFn: async () => {
       const params = new URLSearchParams()
       params.append('is_bill', 'false') // Apenas transações não-boletos
+      params.append('scope', 'personal') // Pagina legada: somente pessoal. PJ fica no workspace.
       if (filters.category) params.append('category', filters.category)
       if (filters.status) params.append('status', filters.status)
       if (filters.issuer) params.append('issuer', filters.issuer)

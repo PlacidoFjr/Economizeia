@@ -30,6 +30,7 @@ const Installments = lazy(() => import('./pages/Installments'))
 const AddExpense = lazy(() => import('./pages/AddExpense'))
 const SavingsGoals = lazy(() => import('./pages/SavingsGoals'))
 const Investments = lazy(() => import('./pages/Investments'))
+const FinanceWorkspace = lazy(() => import('./pages/FinanceWorkspace'))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -73,6 +74,7 @@ function App() {
             >
               <Route index element={<Navigate to="/app/dashboard" replace />} />
               <Route path="dashboard" element={<PageSuspense><Dashboard /></PageSuspense>} />
+              <Route path="finance-workspace" element={<PageSuspense><FinanceWorkspace /></PageSuspense>} />
               <Route path="bills" element={<PageSuspense><Bills /></PageSuspense>} />
               <Route path="bills/upload" element={<PageSuspense><BillUpload /></PageSuspense>} />
               <Route path="bills/add" element={<PageSuspense><AddExpense /></PageSuspense>} />
