@@ -18,6 +18,7 @@ interface SavingsGoal {
 
 export default function SavingsGoals() {
   const queryClient = useQueryClient()
+  const [scope, setScope] = useState<'personal' | 'business'>('personal')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [addingAmountId, setAddingAmountId] = useState<string | null>(null)
@@ -30,9 +31,9 @@ export default function SavingsGoals() {
   const [addAmount, setAddAmount] = useState('')
 
   const { data: goals, isLoading } = useQuery<SavingsGoal[]>({
-    queryKey: ['savings-goals'],
+    queryKey: ['savings-goals', scope],
     queryFn: async () => {
-      const response = await api.get('/savings-goals')
+      const response = await api.get('/savings-goals', { params: { scope } })
       return response.data
     },
   })
@@ -102,6 +103,7 @@ export default function SavingsGoals() {
         deadline: formData.deadline,
         description: formData.description,
         notify_days_before: [30, 15, 7, 3, 1],
+        scope,
       })
     }
   }
@@ -150,6 +152,7 @@ export default function SavingsGoals() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Metas de Economia</h1>
+          <select aria-label="Contexto das metas" className="mt-2 rounded border border-gray-300 p-2 text-sm" value={scope} onChange={e => setScope(e.target.value as 'personal' | 'business')}><option value="personal">Pessoal</option><option value="business">Empresa (PJ)</option></select>
           <p className="mt-2 text-gray-600">Defina e acompanhe suas metas de economia</p>
         </div>
         <button

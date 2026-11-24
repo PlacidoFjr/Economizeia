@@ -4,11 +4,11 @@ from fastapi.responses import JSONResponse
 import logging
 
 from app.core.config import settings
-from app.api.v1 import auth, bills, payments, notifications, qa, chatbot, savings_goals, investments
+from app.api.v1 import auth, bills, payments, notifications, qa, chatbot, savings_goals, investments, finance
 from app.db.database import engine, Base
 
 # Importar modelos para garantir que sejam registrados no Base.metadata
-from app.db.models import SavingsGoal, Investment, User  # noqa: F401
+from app.db.models import SavingsGoal, Investment, User, MonthlyBudget, PlannedEntry, AccountTransfer  # noqa: F401
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +25,14 @@ def run_migrations():
     
     try:
         with engine.connect() as conn:
+            # Novas colunas sao adicionadas sem apagar dados preexistentes.
+            conn.execute(text("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'personal'"))
+            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'personal'"))
+            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS paid_by VARCHAR(20) NOT NULL DEFAULT 'self'"))
+            conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS account_id UUID REFERENCES accounts(id)"))
+            conn.execute(text("ALTER TABLE savings_goals ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'personal'"))
+            conn.execute(text("ALTER TABLE investments ADD COLUMN IF NOT EXISTS scope VARCHAR(20) NOT NULL DEFAULT 'personal'"))
+            conn.commit()
             # Verificar se a coluna amount ainda tem NOT NULL
             result = conn.execute(text("""
                 SELECT is_nullable 
@@ -77,6 +85,7 @@ app.include_router(qa.router, prefix="/api/v1/qa", tags=["QA"])
 app.include_router(chatbot.router, prefix="/api/v1/chatbot", tags=["Chatbot"])
 app.include_router(savings_goals.router, prefix="/api/v1/savings-goals", tags=["Metas de Economia"])
 app.include_router(investments.router, prefix="/api/v1/investments", tags=["Investimentos"])
+app.include_router(finance.router, prefix="/api/v1/finance", tags=["Financeiro Pessoal/PJ"])
 
 
 @app.get("/")

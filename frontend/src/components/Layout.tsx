@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet, Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../contexts/AuthContext'
-import { Home, FileText, Upload, LogOut, Calendar, CreditCard, Menu, X, DollarSign, Target, TrendingUp } from 'lucide-react'
+import { Home, FileText, Upload, LogOut, Calendar, CreditCard, Menu, X, DollarSign, Target, TrendingUp, Briefcase } from 'lucide-react'
 import Chatbot from './Chatbot'
 
 export default function Layout() {
@@ -20,6 +20,7 @@ export default function Layout() {
 
   const menuItems = [
     { to: '/app/dashboard', icon: Home, label: 'Painel' },
+    { to: '/app/finance-workspace', icon: Briefcase, label: 'Pessoal / PJ' },
     { to: '/app/bills', icon: FileText, label: 'Boletos' },
     { to: '/app/finances', icon: DollarSign, label: 'Finanças' },
     { to: '/app/bills/add', icon: Upload, label: 'Adicionar' },

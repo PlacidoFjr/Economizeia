@@ -1,0 +1,99 @@
+name: Finance module checks
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/finance-checks.yml"
+  push:
+    branches:
+      - "feat/financas-pessoal-pj"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  python-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m compileall -q backend/app backend/tests
+
+  finance-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend and test dependencies
+        run: pip install -r backend/requirements.txt pytest
+      - name: Run core accounting tests
+        working-directory: backend
+        run: python -m pytest -q tests/test_finance_core.py
+
+  backend-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: economizeia_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d economizeia_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres@localhost:5432/economizeia_ci
+      ENVIRONMENT: test
+      CORS_ORIGINS: '["http://localhost:5173"]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate ephemeral application key for CI
+        run: echo "SECRET_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Create legacy schema before running migration
+        run: psql -h localhost -U postgres -d economizeia_ci -v ON_ERROR_STOP=1 -f backend/app/db/schema.sql
+      - name: Verify FastAPI startup and finance database objects
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          from sqlalchemy import inspect
+          from app.main import app
+          from app.db.database import engine
+          i = inspect(engine)
+          assert {"monthly_budgets", "planned_entries", "account_transfers"}.issubset(set(i.get_table_names()))
+          for name in ("accounts", "bills", "savings_goals", "investments"):
+              fields = {c["name"] for c in i.get_columns(name)}
+              assert "scope" in fields, (name, fields)
+          assert {"scope", "paid_by", "account_id"}.issubset(
+              {c["name"] for c in i.get_columns("bills")}
+          )
+          assert any(r.path == "/api/v1/finance/overview" for r in app.routes)
+          print("Database schema and finance API available")
+          PY

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime, timedelta
 from uuid import UUID
 import uuid
@@ -23,6 +23,7 @@ class SavingsGoalCreate(BaseModel):
     deadline: str  # YYYY-MM-DD
     description: Optional[str] = None
     notify_days_before: Optional[List[int]] = [30, 15, 7, 3, 1]
+    scope: Literal['personal', 'business'] = 'personal'
 
 
 class SavingsGoalUpdate(BaseModel):
@@ -74,6 +75,7 @@ async def create_savings_goal(
         current_amount=0.0,
         deadline=deadline,
         description=goal_data.description,
+        scope=goal_data.scope,
         status=SavingsGoalStatus.ACTIVE,
         notify_days_before=goal_data.notify_days_before
     )
@@ -95,6 +97,7 @@ async def create_savings_goal(
     return {
         "id": str(goal.id),
         "name": goal.name,
+            "scope": goal.scope,
         "target_amount": goal.target_amount,
         "current_amount": goal.current_amount,
         "deadline": goal.deadline.isoformat(),
@@ -105,12 +108,15 @@ async def create_savings_goal(
 @router.get("")
 async def list_savings_goals(
     status_filter: Optional[str] = None,
+    scope: Optional[Literal['personal', 'business']] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Listar todas as metas de economia do usuário."""
     query = db.query(SavingsGoal).filter(SavingsGoal.user_id == current_user.id)
     
+    if scope:
+        query = query.filter(SavingsGoal.scope == scope)
     if status_filter:
         query = query.filter(SavingsGoal.status == SavingsGoalStatus(status_filter))
     
@@ -133,6 +139,7 @@ async def list_savings_goals(
         result.append({
             "id": str(goal.id),
             "name": goal.name,
+            "scope": goal.scope,
             "target_amount": goal.target_amount,
             "current_amount": goal.current_amount,
             "deadline": goal.deadline.isoformat(),
@@ -173,6 +180,7 @@ async def get_savings_goal(
     return {
         "id": str(goal.id),
         "name": goal.name,
+            "scope": goal.scope,
         "target_amount": goal.target_amount,
         "current_amount": goal.current_amount,
         "deadline": goal.deadline.isoformat(),
@@ -249,6 +257,7 @@ async def update_savings_goal(
     return {
         "id": str(goal.id),
         "name": goal.name,
+            "scope": goal.scope,
         "target_amount": goal.target_amount,
         "current_amount": goal.current_amount,
         "deadline": goal.deadline.isoformat(),

@@ -96,7 +96,8 @@ class Account(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False)  # checking, savings, credit
-    estimated_balance = Column(Float, default=0.0)
+    estimated_balance = Column(Float, default=0.0)  # Saldo inicial
+    scope = Column(String(20), nullable=False, default='personal', server_default='personal')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -118,6 +119,9 @@ class Bill(Base):
     is_bill = Column(Boolean, default=True)  # True se for boleto/documento, False se for transação manual
     confidence = Column(Float, default=0.0)
     category = Column(String(50), nullable=True)
+    scope = Column(String(20), nullable=False, default='personal', server_default='personal')
+    paid_by = Column(String(20), nullable=False, default='self', server_default='self')
+    account_id = Column(UUID(as_uuid=True), ForeignKey('accounts.id'), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -200,6 +204,7 @@ class SavingsGoal(Base):
     current_amount = Column(Float, default=0.0)  # Valor já guardado
     deadline = Column(Date, nullable=False)  # Data limite
     description = Column(Text, nullable=True)  # Descrição opcional
+    scope = Column(String(20), nullable=False, default='personal', server_default='personal')
     status = Column(Enum(SavingsGoalStatus), default=SavingsGoalStatus.ACTIVE)
     notify_days_before = Column(JSONB, default=[30, 15, 7, 3, 1])  # Dias antes para avisar
     last_notification_sent = Column(Date, nullable=True)  # Última notificação enviada
@@ -223,6 +228,7 @@ class Investment(Base):
     institution = Column(String(255), nullable=True)  # Corretora/Banco
     ticker = Column(String(50), nullable=True)  # Código (ex: PETR4, BTC)
     notes = Column(Text, nullable=True)  # Observações
+    scope = Column(String(20), nullable=False, default='personal', server_default='personal')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -241,3 +247,46 @@ class AuditLog(Base):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
 
+
+
+
+class MonthlyBudget(Base):
+    __tablename__ = "monthly_budgets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    scope = Column(String(20), nullable=False, default="personal")
+    category = Column(String(50), nullable=False)
+    month = Column(Date, nullable=False)
+    amount = Column(Float, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PlannedEntry(Base):
+    __tablename__ = "planned_entries"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    scope = Column(String(20), nullable=False, default="personal")
+    title = Column(String(255), nullable=False)
+    type = Column(String(20), nullable=False)
+    amount = Column(Float, nullable=False)
+    planned_date = Column(Date, nullable=False, index=True)
+    category = Column(String(50), nullable=True)
+    paid_by = Column(String(20), nullable=False, default="self")
+    status = Column(String(20), nullable=False, default="planned")
+    realized_bill_id = Column(UUID(as_uuid=True), ForeignKey("bills.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AccountTransfer(Base):
+    __tablename__ = "account_transfers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    from_account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
+    to_account_id = Column(UUID(as_uuid=True), ForeignKey("accounts.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    transferred_on = Column(Date, nullable=False)
+    notes = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

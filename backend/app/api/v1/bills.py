@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import date, datetime
 from uuid import UUID
 import uuid
 import logging
 
 from app.db.database import get_db
-from app.db.models import User, Bill, BillDocument, BillStatus, BillType
+from app.db.models import User, Bill, BillDocument, BillStatus, BillType, Account
 from app.api.dependencies import get_current_user
 from app.services.ocr_service import ocr_service
 from app.services.ollama_service import ollama_service
@@ -62,6 +62,9 @@ class BillCreateRequest(BaseModel):
     status: Optional[str] = "confirmed"  # pending, confirmed, scheduled
     type: Optional[str] = "expense"  # expense ou income
     is_bill: Optional[bool] = False  # False para transações manuais (não-boletos)
+    scope: Literal['personal', 'business'] = 'personal'
+    paid_by: Optional[Literal['self', 'family', 'business', 'other']] = None
+    account_id: Optional[UUID] = None
 
 
 @router.post("/upload", response_model=BillUploadResponse, status_code=status.HTTP_201_CREATED)
@@ -343,6 +346,15 @@ async def create_bill(
     # Default issuer based on type
     default_issuer = "Receita Manual" if bill_type == BillType.INCOME else "Despesa Manual"
     
+    if bill_data.scope == 'business' and bill_data.paid_by not in (None, 'business'):
+        raise HTTPException(status_code=400, detail='Lancamentos PJ devem ser pagos pela empresa')
+    if bill_data.account_id:
+        account = db.query(Account).filter(Account.id == bill_data.account_id, Account.user_id == current_user.id).first()
+        if not account or account.scope != bill_data.scope:
+            raise HTTPException(status_code=400, detail='Conta inexistente ou de outro contexto financeiro')
+        if bill_data.paid_by in ('family', 'other'):
+            raise HTTPException(status_code=400, detail='Lancamentos pagos por terceiros nao movimentam contas proprias')
+
     # Create bill
     bill = Bill(
         id=uuid.uuid4(),
@@ -356,7 +368,10 @@ async def create_bill(
         type=bill_type,
         is_bill=bill_data.is_bill if bill_data.is_bill is not None else False,  # False para transações manuais
         confidence=1.0,  # Manual entry = 100% confidence
-        category=bill_data.category
+        category=bill_data.category,
+        scope=bill_data.scope,
+        paid_by=bill_data.paid_by or ('business' if bill_data.scope == 'business' else 'self'),
+        account_id=bill_data.account_id
     )
     
     db.add(bill)
@@ -388,6 +403,9 @@ async def create_bill(
         "status": bill.status.value,
         "type": bill.type.value,
         "category": bill.category,
+        "scope": bill.scope,
+        "paid_by": bill.paid_by,
+        "account_id": str(bill.account_id) if bill.account_id else None,
         "confidence": bill.confidence
     }
 
@@ -440,6 +458,9 @@ async def get_bill(
         "type": bill.type.value if bill.type else "expense",
         "confidence": bill.confidence,
         "category": bill.category,
+        "scope": bill.scope,
+        "paid_by": bill.paid_by,
+        "account_id": str(bill.account_id) if bill.account_id else None,
         "ocr_text": ocr_text,
         "extracted_json": document.extracted_json if document else None,
         "image_url": image_url,  # URL da imagem do boleto
@@ -635,6 +656,8 @@ async def list_bills(
     status: Optional[str] = None,
     issuer: Optional[str] = None,
     is_bill: Optional[bool] = None,  # Novo filtro: True para boletos, False para finanças
+    scope: Optional[Literal['personal', 'business']] = None,
+    category: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -643,6 +666,10 @@ async def list_bills(
     
     if is_bill is not None:
         query = query.filter(Bill.is_bill == is_bill)
+    if scope:
+        query = query.filter(Bill.scope == scope)
+    if category:
+        query = query.filter(Bill.category == category)
     
     if from_date:
         query = query.filter(Bill.due_date >= datetime.fromisoformat(from_date).date())
@@ -674,6 +701,9 @@ async def list_bills(
             "type": bill.type.value if bill.type else "expense",
             "is_bill": bill.is_bill if hasattr(bill, 'is_bill') else True,  # Retrocompatibilidade
             "category": bill.category,
+            "scope": bill.scope,
+            "paid_by": bill.paid_by,
+            "account_id": str(bill.account_id) if bill.account_id else None,
             "confidence": bill.confidence
         }
         for bill in bills

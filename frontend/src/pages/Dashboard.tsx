@@ -28,7 +28,7 @@ export default function Dashboard() {
   const { data: bills, isLoading: isLoadingBills } = useQuery({
     queryKey: ['bills'],
     queryFn: async () => {
-      const response = await api.get('/bills?is_bill=true')
+      const response = await api.get('/bills?is_bill=true&scope=personal')
       return response.data
     },
   })
@@ -36,7 +36,7 @@ export default function Dashboard() {
   const { data: finances, isLoading: isLoadingFinances } = useQuery({
     queryKey: ['finances'],
     queryFn: async () => {
-      const response = await api.get('/bills?is_bill=false')
+      const response = await api.get('/bills?is_bill=false&scope=personal')
       return response.data
     },
   })
@@ -81,7 +81,7 @@ export default function Dashboard() {
 
     // Calcular despesas do mês (todas as transações de despesa pagas/confirmadas)
     const expensesThisMonth = transactionsThisMonth
-      .filter((b: any) => b.type === 'expense' && (b.status === 'paid' || b.status === 'confirmed'))
+      .filter((b: any) => b.type === 'expense' && b.paid_by !== 'family' && b.paid_by !== 'other' && (b.status === 'paid' || b.status === 'confirmed'))
       .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
 
     // Calcular receitas (todas as transações de receita pagas/confirmadas)
@@ -105,7 +105,7 @@ export default function Dashboard() {
   // Agrupar por categoria (usando todas as transações) - memoizado
   const categoryChartData = useMemo(() => {
     const categoryData = transactionsThisMonth.reduce((acc: any, bill: any) => {
-      if (bill.type === 'expense') { // Apenas despesas
+      if (bill.type === 'expense' && bill.paid_by !== 'family' && bill.paid_by !== 'other' && (bill.status === 'paid' || bill.status === 'confirmed')) { // Apenas despesas realizadas e próprias
         const category = bill.category || 'Outras'
         if (!acc[category]) {
           acc[category] = { name: category, value: 0, count: 0 }
@@ -127,7 +127,7 @@ export default function Dashboard() {
   // Agrupar por emissor (top 10) - memoizado
   const issuerChartData = useMemo(() => {
     const issuerData = transactionsThisMonth.reduce((acc: any, bill: any) => {
-      if (bill.type === 'expense') { // Apenas despesas
+      if (bill.type === 'expense' && bill.paid_by !== 'family' && bill.paid_by !== 'other' && (bill.status === 'paid' || bill.status === 'confirmed')) { // Apenas despesas realizadas e próprias
         const issuer = bill.issuer || 'Desconhecido'
         if (!acc[issuer]) {
           acc[issuer] = { name: issuer, value: 0, count: 0 }
@@ -166,7 +166,7 @@ export default function Dashboard() {
       }) || []
 
       const expenses = monthTransactions
-        .filter((b: any) => b.type === 'expense' && (b.status === 'paid' || b.status === 'confirmed'))
+        .filter((b: any) => b.type === 'expense' && b.paid_by !== 'family' && b.paid_by !== 'other' && (b.status === 'paid' || b.status === 'confirmed'))
         .reduce((sum: number, b: any) => sum + (b.amount || 0), 0)
 
       const income = monthTransactions
@@ -277,7 +277,7 @@ export default function Dashboard() {
             Bem-vindo, {currentUser.name}.
           </p>
         )}
-        <p className="text-xs sm:text-sm text-gray-600">Visão geral das suas finanças</p>
+        <p className="text-xs sm:text-sm text-gray-600">Visão pessoal (somente movimentações realizadas com seu dinheiro). <a href="/app/finance-workspace" className="text-blue-700 underline">Abrir Pessoal / PJ</a></p>
       </div>
 
       {/* Stats Principais */}

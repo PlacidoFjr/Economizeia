@@ -29,6 +29,7 @@ const INVESTMENT_TYPES = [
 
 export default function Investments() {
   const queryClient = useQueryClient()
+  const [scope, setScope] = useState<'personal' | 'business'>('personal')
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [typeFilter, setTypeFilter] = useState<string>('')
@@ -45,17 +46,16 @@ export default function Investments() {
   })
 
   const { data: investments, isLoading } = useQuery<Investment[]>({
-    queryKey: ['investments', typeFilter],
+    queryKey: ['investments', typeFilter, scope],
     queryFn: async () => {
-      const params = typeFilter ? `?type_filter=${typeFilter}` : ''
-      const response = await api.get(`/investments${params}`)
+      const response = await api.get('/investments', { params: { type_filter: typeFilter || undefined, scope } })
       return response.data
     },
   })
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await api.post('/investments', data)
+      const response = await api.post('/investments', { ...data, scope })
       return response.data
     },
     onSuccess: () => {
@@ -167,6 +167,7 @@ export default function Investments() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Investimentos</h1>
+          <select aria-label="Contexto dos investimentos" className="mt-2 rounded border border-gray-300 p-2 text-sm" value={scope} onChange={e => setScope(e.target.value as 'personal' | 'business')}><option value="personal">Pessoal</option><option value="business">Empresa (PJ)</option></select>
           <p className="mt-2 text-gray-600">Gerencie seus investimentos e acompanhe o desempenho</p>
         </div>
         <button
