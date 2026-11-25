@@ -234,7 +234,9 @@ def handle_financial_chat(message, current_user, db):
     if len(items) > 60:
         db.commit()
         return reply("Envie até 60 itens por vez. Nenhum lançamento foi salvo.", "ask_for_info")
-    state.draft = [asdict(i) for i in items]
+    draft = [asdict(i) for i in items]
+    response = reply(f"Preparei {len(draft)} item(ns). Ainda não salvei nenhum lançamento.\n\n" + "\n".join(describe(i) for i in draft) + "\n\nConfira valores, tipo, responsável e período. Responda 'confirmar lançamentos' para salvar ou 'cancelar' para descartar.", "confirm_transactions")
+    state.draft = draft
     state.expires_at = now + timedelta(minutes=30)
     db.commit()
-    return reply(f"Preparei {len(items)} item(ns). Ainda não salvei nenhum lançamento.\n\n" + "\n".join(describe(i) for i in items) + "\n\nConfira valores, tipo, responsável e período. Responda 'confirmar lançamentos' para salvar ou 'cancelar' para descartar.", "confirm_transactions")
+    return response
