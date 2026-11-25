@@ -1,3 +1,4 @@
+import FinancialPlanning from '../components/FinancialPlanning'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { endOfMonth, format, startOfMonth } from 'date-fns'
@@ -59,6 +60,8 @@ export default function Payments() {
         </div>
         <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
       </div>
+
+      <FinancialPlanning month={selectedMonth} mode="expenses" />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
