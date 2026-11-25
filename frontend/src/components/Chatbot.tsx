@@ -266,6 +266,9 @@ export default function Chatbot() {
             queryClient.invalidateQueries({ queryKey: ['bills'] }),
             queryClient.invalidateQueries({ queryKey: ['finances'] }),
             queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+            queryClient.invalidateQueries({ queryKey: ['financial-overview'] }),
+            queryClient.invalidateQueries({ queryKey: ['savings-goals'] }),
+            queryClient.invalidateQueries({ queryKey: ['payments'] }),
           ])
           
           // Forçar refetch imediato das queries críticas
