@@ -1,4 +1,3 @@
-import FinancialPlanning from '../components/FinancialPlanning'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { startOfMonth } from 'date-fns'
@@ -118,7 +117,7 @@ export default function Dashboard() {
     // Filtrar transações do mês atual
     const transactionsThisMonth = allTransactions?.filter((b: any) => {
       if (!b.due_date) return false
-      const dueDate = new Date(b.due_date + 'T12:00:00')
+      const dueDate = new Date(b.due_date)
       return dueDate.getMonth() === currentMonth && dueDate.getFullYear() === currentYear
     }) || []
 
@@ -208,7 +207,7 @@ export default function Dashboard() {
       const date = new Date(currentYear, currentMonth - i, 1)
       const monthTransactions = allTransactions?.filter((b: any) => {
         if (!b.due_date) return false
-        const dueDate = new Date(b.due_date + 'T12:00:00')
+        const dueDate = new Date(b.due_date)
         return dueDate.getMonth() === date.getMonth() && dueDate.getFullYear() === date.getFullYear()
       }) || []
 
@@ -296,7 +295,7 @@ export default function Dashboard() {
 
     const overdueBills = transactionsThisMonth?.filter((b: any) => {
       if (!b.due_date) return false
-      const dueDate = new Date(b.due_date + 'T12:00:00')
+      const dueDate = new Date(b.due_date)
       // Despesa comum confirmada nao vira alerta; so aviso/pagamento pendente.
       return dueDate < new Date() &&
              (b.status === 'pending' || b.status === 'scheduled') &&
@@ -354,8 +353,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      <FinancialPlanning month={selectedMonth} />
 
       {/* Stats Principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 lg:gap-4">
