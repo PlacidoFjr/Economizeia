@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.db.database import get_db
 from app.db.models import User
-from app.services.financial_chat_service import handle_financial_chat
+from app.services.financial_chat_service import handle_financial_chat, monthly_financial_overview, today_local
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,3 +37,13 @@ async def chat_with_assistant(chat_data: ChatMessage, current_user: User = Depen
         db.rollback()
         logger.exception("Financial chat request failed")
         raise HTTPException(status_code=500, detail="Não foi possível processar a mensagem. Nenhuma alteração parcial foi salva.")
+
+
+@router.get("/overview")
+def financial_overview(month: Optional[str] = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from datetime import date
+    import re
+    month = month or today_local().strftime("%Y-%m")
+    if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(status_code=422, detail="Informe o mês no formato AAAA-MM.")
+    return monthly_financial_overview(db, current_user.id, month)
