@@ -5,7 +5,8 @@ from zoneinfo import ZoneInfo
 import re
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from fastapi import HTTPException
+from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.sql import func
 
@@ -142,6 +143,20 @@ def handle_financial_chat(message, current_user, db):
     # Serialize confirmation and duplicate detection per authenticated account.
     user = db.query(User).filter(User.id == current_user.id).with_for_update().one()
     uid = user.id
+    # Preserve existing plan quotas; finishing or cancelling a pending draft
+    # is free so a user is never prevented from discarding a draft.
+    controls = {"cancelar", "cancela", "nao", "descartar", "cancelar lancamentos", "limpar rascunho",
+                "sim", "confirmar", "confirmo", "confirmar lancamentos", "pode salvar", "salvar",
+                "pode cadastrar", "pode registrar", "sim pode salvar"}
+    if n not in controls:
+        prefs = dict(user.notif_prefs or {})
+        current_month = today.replace(day=1).isoformat()
+        count = int(prefs.get("chatbot_messages_this_month") or 0) if str(prefs.get("chatbot_month_reset_date") or "")[:7] == current_month[:7] else 0
+        limit = 1000 if prefs.get("is_premium") else 25
+        if count >= limit:
+            raise HTTPException(status_code=429, detail=f"Limite mensal de {limit} mensagens atingido. Você ainda pode confirmar ou cancelar um rascunho existente.")
+        prefs.update(chatbot_messages_this_month=count + 1, chatbot_month_reset_date=current_month)
+        user.notif_prefs = prefs
     state = db.query(FinancialChatState).filter_by(user_id=uid).first()
     if state is None:
         state = FinancialChatState(user_id=uid, draft=[])
