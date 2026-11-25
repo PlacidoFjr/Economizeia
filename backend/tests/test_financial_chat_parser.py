@@ -21,8 +21,8 @@ class FinancialChatParserTests(unittest.TestCase):
 
     def test_monthly_plan(self):
         items, issues = interpret("""RECEITA
-- Contrato PJ Visão Promotora: R$ 2.000,00 por mês, durante 6 meses.
-- Conta de recebimento: Cora PJ.
+- Contrato PJ Empresa Exemplo: R$ 2.000,00 por mês, durante 6 meses.
+- Conta de recebimento: Conta Exemplo PJ.
 DESPESAS PAGAS POR MIM
 - Moradia: R$ 40,00/mês.
 - Ônibus e metrô: R$ 100,00/mês.
@@ -49,7 +49,7 @@ REGRAS IMPORTANTES
         self.assertEqual(p["budget"], 20000)
         self.assertEqual(p["reserve"], 40000)
         self.assertEqual(p["income"] - p["expense"] - p["budget"] - p["reserve"], 71395)
-        self.assertEqual(items[0].account, "Cora PJ.")
+        self.assertEqual(items[0].account, "Conta Exemplo PJ.")
         self.assertFalse(occurs(data[0], "2027-05"))
 
     def test_actual_and_third_party(self):
@@ -67,7 +67,7 @@ REGRAS IMPORTANTES
         self.assertEqual([i.month for i in items], ["2026-11", "2026-12"])
 
     def test_ambiguous_values(self):
-        for line in ["R$ 400 previstos para fim de semana", "Comprei R$ 900 em 3x", "Gastei R$ 20 e R$ 30 hoje", "Gastei R$ 35 em 31/02/2026", "Gastei R$ -10 hoje"]:
+        for line in ["R$ 400 previstos para fim de semana", "Comprei R$ 900 em 3x", "Gastei R$ 20 e R$ 30 hoje", "Gastei R$ 35 em 31/02/2026", "Gastei R$ -10 hoje", "Meu pai não pagou R$ 50 ontem", "Meu pai paga academia R$ 150"]:
             items, issues = interpret(line, self.today)
             self.assertFalse(items, line)
             self.assertTrue(issues, line)
