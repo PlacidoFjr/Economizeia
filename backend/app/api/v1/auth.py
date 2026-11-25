@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from datetime import timedelta, datetime, timezone
 import logging
+import hashlib
 from app.db.database import get_db
 from app.db.models import User
 from app.core.security import (
@@ -17,12 +18,21 @@ from app.core.security import (
 from app.core.config import settings
 from app.services.audit_service import audit_service
 from app.services.notification_service import notification_service
+from app.services.rate_limit_service import rate_limit_service
 from app.api.dependencies import get_current_user
 from fastapi import Request
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _check_password_reset_rate_limit(email: str, request: Request = None) -> None:
+    """Apply limits per IP and address, whether or not the account exists."""
+    client_ip = request.client.host if request and request.client else "unknown"
+    address_hash = hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()
+    rate_limit_service.check(f"forgot:ip:{client_ip}", limit=10, window_seconds=900)
+    rate_limit_service.check(f"forgot:email:{address_hash}", limit=3, window_seconds=3600)
 
 
 class UserRegister(BaseModel):
@@ -234,7 +244,8 @@ async def forgot_password(
     db: Session = Depends(get_db),
     request: Request = None
 ):
-    """Request password reset. Sends email with reset link."""
+    """Accept reset requests without revealing whether the account exists."""
+    _check_password_reset_rate_limit(request_data.email, request)
     user = db.query(User).filter(User.email == request_data.email).first()
     
     # Always return success to prevent email enumeration
@@ -245,11 +256,8 @@ async def forgot_password(
     reset_token = create_reset_token(data={"sub": str(user.id), "email": user.email})
     reset_token_expires = datetime.now(timezone.utc) + timedelta(hours=1)
     
-    # Save token to user
-    user.reset_token = reset_token
-    user.reset_token_expires = reset_token_expires
-    db.commit()
-    
+    # Persist the token only after an email provider accepts the message.
+
     # Send email with reset link
     reset_link = f"{settings.FRONTEND_URL or 'http://localhost:3000'}/reset-password?token={reset_token}"
     
@@ -368,11 +376,13 @@ Equipe EconomizeIA
     )
     
     if email_sent:
-        logger.info(f"Password reset email sent successfully to {user.email}")
+        user.reset_token = reset_token
+        user.reset_token_expires = reset_token_expires
+        db.commit()
+        logger.info("Password reset email accepted by delivery provider")
     else:
-        # If email not configured, log the token (for development)
-        logger.warning(f"SMTP not configured. Reset token for {user.email}: {reset_token}")
-        logger.warning(f"Reset link: {reset_link}")
+        # Never log a recovery URL or token, even during development.
+        logger.warning("Password reset email not delivered; check the mail provider configuration")
     
     # Audit log
     audit_service.log_action(
