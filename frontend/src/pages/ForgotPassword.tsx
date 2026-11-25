@@ -17,9 +17,16 @@ export default function ForgotPassword() {
     try {
       await api.post('/auth/forgot-password', { email })
       setSuccess(true)
-    } catch {
-      // Sempre mostrar sucesso para não expor emails
-      setSuccess(true)
+    } catch (err: any) {
+      // Manter resposta genérica para contas inexistentes, mas não mascarar falhas técnicas.
+      setSuccess(false)
+      if (err?.response?.status === 429) {
+        setError('Muitas solicitações. Aguarde alguns minutos antes de tentar novamente.')
+      } else if (!err?.response) {
+        setError('Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.')
+      } else {
+        setError('Não foi possível processar a solicitação agora. Tente novamente mais tarde.')
+      }
     } finally {
       setLoading(false)
     }
@@ -33,9 +40,9 @@ export default function ForgotPassword() {
             <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Email Enviado</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Solicitação recebida</h2>
             <p className="text-sm text-gray-600 mb-6">
-              Se o email <strong>{email}</strong> estiver cadastrado, você receberá um link para redefinir sua senha.
+              Se o e-mail <strong>{email}</strong> estiver cadastrado e o serviço de envio estiver disponível, você receberá um link de recuperação. Confira também a pasta de spam.
             </p>
             <div className="space-y-3">
               <Link
@@ -47,11 +54,10 @@ export default function ForgotPassword() {
               <button
                 onClick={() => {
                   setSuccess(false)
-                  setEmail('')
                 }}
                 className="block w-full py-2 px-4 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium text-sm transition-colors"
               >
-                Enviar novamente
+                Solicitar outro link
               </button>
             </div>
           </div>
