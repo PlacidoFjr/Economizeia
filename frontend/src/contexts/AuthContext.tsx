@@ -21,10 +21,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-function clearLegacyTokens() {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  delete api.defaults.headers.common.Authorization
+function clearAuthTokens() {
+  sessionStorage.removeItem('access_token')
+  sessionStorage.removeItem('refresh_token')
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -37,37 +36,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    clearLegacyTokens()
+    if (!sessionStorage.getItem('access_token')) {
+      setIsAuthLoading(false)
+      return
+    }
     loadCurrentUser()
-      .catch(() => setUser(null))
+      .catch(() => {
+        clearAuthTokens()
+        setUser(null)
+      })
       .finally(() => setIsAuthLoading(false))
   }, [])
 
   const login = async (email: string, password: string) => {
-    await api.post('/auth/login', { email, password })
-    clearLegacyTokens()
-    await loadCurrentUser()
+    const response = await api.post('/auth/login', { email, password })
+    const { access_token, refresh_token } = response.data
+    if (!access_token || !refresh_token) {
+      throw new Error('O servidor não retornou os tokens de autenticação.')
+    }
+    sessionStorage.setItem('access_token', access_token)
+    sessionStorage.setItem('refresh_token', refresh_token)
+    try {
+      await loadCurrentUser()
+    } catch (error) {
+      clearAuthTokens()
+      setUser(null)
+      throw error
+    }
   }
 
   const register = async (name: string, email: string, password: string) => {
     const response = await api.post('/auth/register', { name, email, password })
-    clearLegacyTokens()
+    clearAuthTokens()
     return response.data
   }
 
   const logout = async () => {
-    try {
-      await api.post('/auth/logout')
-    } finally {
-      clearLegacyTokens()
-      setUser(null)
-    }
+    clearAuthTokens()
+    setUser(null)
   }
 
   const value = useMemo<AuthContextType>(
     () => ({
       user,
-      token: null,
+      token: sessionStorage.getItem('access_token'),
       login,
       register,
       logout,
