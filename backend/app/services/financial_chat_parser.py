@@ -3,7 +3,7 @@
 No model output or browser-provided history can authorize a write.
 Amounts are parsed as integer BRL cents. Ambiguous input is not committed.
 """
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 import re
@@ -197,7 +197,10 @@ def interpret(message, today):
             kind = "income"
         else:
             kind = "expense"
-        actual = bool(re.search(r"\b(gastei|paguei|comprei|recebi|ganhei|pago|paga|pagou|recebido)\b", n)) and not is_monthly and not re.search(r"\b(previsto|prevista|planejado|planejada|futuro|vou|limite)\b", n)
+        actual = bool(re.search(r"\b(gastei|paguei|comprei|recebi|ganhei|pago|pagou|recebido|ja paga)\b", n)) and not is_monthly and not re.search(r"\b(previsto|prevista|planejado|planejada|futuro|vou|limite)\b", n)
+        if re.search(r"\bnao\s+(?:gastei|paguei|pagou|pago|recebi|ganhei|comprei)\b", n):
+            unresolved.append(line + " (confirme se a despesa ou receita e apenas prevista)")
+            continue
         if kind in ("reserve", "budget"):
             actual = False
         if actual and day is None and not has_month:
