@@ -1,3 +1,4 @@
+import FinancialPlanning from '../components/FinancialPlanning'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
@@ -156,6 +157,7 @@ export default function Finances() {
           </Link>
         </div>
       </div>
+      <FinancialPlanning month={selectedMonth} />
 
       {/* Filtros */}
       {showFilters && (
