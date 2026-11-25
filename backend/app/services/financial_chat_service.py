@@ -74,15 +74,35 @@ def read_plans(db, uid):
     return [r.data for r in db.query(FinancialPlanItem).filter(FinancialPlanItem.user_id == uid).all()]
 
 
-def summarize(db, uid, month, query, today):
-    bills = read_bills(db, uid)
+
+def monthly_financial_overview(db, uid, month):
+    """One shared calculation for the authenticated dashboard and assistant."""
     plans = read_plans(db, uid)
+    bills = read_bills(db, uid)
     monthly = [b for b in bills if b.due_date and b.due_date.strftime("%Y-%m") == month]
     expenses = sum(money_cents(b.amount) for b in monthly if b.type == BillType.EXPENSE and b.status == BillStatus.PAID)
     income = sum(money_cents(b.amount) for b in monthly if b.type == BillType.INCOME and b.status == BillStatus.PAID)
     pending = [b for b in monthly if b.type == BillType.EXPENSE and b.status != BillStatus.PAID]
-    pending_total = sum(money_cents(b.amount) for b in pending)
     p = plan_totals(plans, month)
+    return {
+        "month": month,
+        "actual": {"income": income, "expense": expenses, "third": p["third_actual"],
+                   "balance": income - expenses, "pending": sum(money_cents(b.amount) for b in pending)},
+        "planned": {**p, "available": p["income"] - p["expense"] - p["budget"] - p["reserve"],
+                    "cost_of_living": p["expense"] + p["third"] + p["budget"]},
+        "items": [dict(row.data, id=str(row.id)) for row in db.query(FinancialPlanItem).filter(FinancialPlanItem.user_id == uid).all() if occurs(row.data, month)],
+    }
+
+
+def summarize(db, uid, month, query, today):
+    bills = read_bills(db, uid)
+    plans = read_plans(db, uid)
+    monthly = [b for b in bills if b.due_date and b.due_date.strftime("%Y-%m") == month]
+    overview = monthly_financial_overview(db, uid, month)
+    expenses, income = overview["actual"]["expense"], overview["actual"]["income"]
+    pending = [b for b in monthly if b.type == BillType.EXPENSE and b.status != BillStatus.PAID]
+    pending_total = overview["actual"]["pending"]
+    p = overview["planned"]
     n = norm(query)
     if any(w in n for w in ("pendente", "em aberto", "falta pagar", "vencid", "vencimento", "vence")):
         # Keep actual unpaid bills separate from planned amounts without a due day.
@@ -202,7 +222,7 @@ def handle_financial_chat(message, current_user, db):
         if skipped:
             lines.append(f"{len(skipped)} item(ns) idêntico(s) já existente(s) foram ignorados.")
         if any(i["frequency"] != "actual" or i["payer"] == "third" for i in created):
-            lines.append("Planejamento e gastos de terceiros ficam no resumo do chat, sem alterar seu saldo próprio no dashboard.")
+            lines.append("Planejamento e gastos de terceiros aparecem no dashboard, sem alterar seu saldo próprio realizado.")
         return reply("\n".join(lines), "transactions_created" if created else "chat", bill_ids[0] if bill_ids else None)
     # Questions must not be mistaken for commands, even if a number is present.
     is_question = bool(re.match(r"^(quanto|quais|qual|como|quando|mostr[ae]|listar|resumo|me (?:mostre|diga)|e (?:no|em|mes)|saldo|gastos por categoria|contas pendentes|planejamento mensal|meu planejamento|meu custo de vida)\b", n)) or ("?" in message and "\n" not in message)
