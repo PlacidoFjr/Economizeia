@@ -20,7 +20,7 @@ interface Message {
 const createInitialMessages = (): Message[] => [
   {
     id: '1',
-    text: 'Oi! Posso consultar seus dados e registrar gastos ou receitas. Se faltar detalhe, eu pergunto antes de salvar.',
+    text: 'Oi! Posso organizar uma lista de receitas, gastos próprios, despesas pagas por terceiros, limites e metas. Envie um item por linha. Mostro o rascunho antes de salvar.',
     sender: 'bot',
     timestamp: new Date(),
   },
@@ -28,8 +28,8 @@ const createInitialMessages = (): Message[] => [
 
 const QUICK_QUESTIONS = [
   'Gastei R$ 35 no Uber',
-  'R$ 200 boleto pago',
-  'Quanto tenho pendente?',
+  'Academia: R$ 150/mês, paga pelo meu pai',
+  'Meu planejamento mensal',
   'Recebi R$ 2500 de salário',
 ]
 
@@ -109,7 +109,7 @@ export default function Chatbot() {
   const [isLoading, setIsLoading] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const launcherRef = useRef<HTMLButtonElement>(null)
   const skipNextSaveRef = useRef(false)
@@ -196,11 +196,13 @@ export default function Chatbot() {
   }, [isOpen])
 
   const handleQuickQuestion = (question: string) => {
-    setInputText(question)
+    if (isLoading) return
     handleSendMessage(question)
   }
 
   const getBotSuggestions = (action?: string, text?: string) => {
+    if (action === 'confirm_transactions') return ['Confirmar lançamentos', 'Cancelar']
+    if (action === 'transactions_created') return ['Meu planejamento mensal', 'Como está meu saldo?', 'Gastos por categoria']
     const normalizedText = (text || '').toLowerCase()
     if (action === 'ask_for_info' && (normalizedText.includes('com o que') || normalizedText.includes('onde foi'))) {
       return DETAIL_SUGGESTIONS
@@ -216,7 +218,7 @@ export default function Chatbot() {
 
   const handleSendMessage = async (text?: string) => {
     const messageText = text || inputText.trim()
-    if (!messageText) return
+    if (!messageText || isLoading) return
 
     // Adiciona mensagem do usuário
     const userMessage: Message = {
@@ -257,7 +259,7 @@ export default function Chatbot() {
       setIsLoading(false)
 
       // Se uma transação foi criada (despesa ou receita), invalidar queries para atualizar o dashboard
-      if (response.data.action === 'expense_created' || response.data.action === 'income_created') {
+      if (['expense_created', 'income_created', 'transactions_created'].includes(response.data.action)) {
         try {
           // Invalidar todas as queries relacionadas
           await Promise.all([
@@ -313,7 +315,18 @@ export default function Chatbot() {
     }
   }
 
-  const clearConversation = () => {
+  const clearConversation = async () => {
+    if (isLoading) return
+    setIsLoading(true)
+    try {
+      await api.post('/chatbot/chat', { message: 'limpar rascunho' })
+    } catch {
+      setClearDialogOpen(false)
+      setMessages(prev => [...prev, { id: String(Date.now()), text: 'Não foi possível cancelar o rascunho no servidor. Tente novamente.', sender: 'bot', timestamp: new Date() }])
+      return
+    } finally {
+      setIsLoading(false)
+    }
     if (storageKey) {
       localStorage.removeItem(storageKey)
     }
@@ -327,7 +340,7 @@ export default function Chatbot() {
       <ConfirmDialog
         open={clearDialogOpen}
         title="Limpar conversa?"
-        description="O histórico atual do assistente será apagado deste navegador. Seus lançamentos financeiros não serão removidos."
+        description="O histórico deste navegador e o rascunho pendente serão descartados. Seus lançamentos e planos já confirmados serão mantidos."
         confirmLabel="Limpar"
         tone="danger"
         onCancel={() => setClearDialogOpen(false)}
@@ -354,7 +367,7 @@ export default function Chatbot() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 18, scale: 0.98 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="chatbot-container safe-area-inset fixed inset-0 z-50 flex flex-col border-0 border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[640px] sm:w-[420px] sm:rounded-lg sm:border"
+          className="chatbot-container safe-area-inset fixed inset-0 z-50 flex flex-col border-0 border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[min(760px,90vh)] sm:w-[520px] sm:rounded-lg sm:border"
         >
           {/* Header */}
           <div className="relative flex items-center justify-between bg-slate-950 p-3 text-white safe-area-top sm:p-4">
@@ -428,12 +441,13 @@ export default function Chatbot() {
                         minute: '2-digit',
                       })}
                     </p>
-                    {message.sender === 'bot' && !!message.suggestions?.length && (
+                    {message.sender === 'bot' && message.id === messages[messages.length - 1]?.id && !!message.suggestions?.length && (
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {message.suggestions.map((suggestion) => (
                           <button
                             key={suggestion}
                             type="button"
+                            disabled={isLoading}
                             onClick={() => handleQuickQuestion(suggestion)}
                             className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
                           >
@@ -491,15 +505,17 @@ export default function Chatbot() {
 
           {/* Input */}
           <div className="safe-area-bottom border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:p-4">
+            <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Enter envia · Shift + Enter adiciona uma linha</p>
             <div className="flex space-x-2">
-              <input
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={3}
+                maxLength={16000}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Digite sua mensagem..."
-                className="touch-manipulation min-h-[44px] flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
+                onKeyDown={handleKeyPress}
+                placeholder="Digite ou cole uma lista de gastos..."
+                className="touch-manipulation min-h-[44px] max-h-48 resize-y flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
                 disabled={isLoading}
                 autoComplete="off"
                 autoCorrect="off"
