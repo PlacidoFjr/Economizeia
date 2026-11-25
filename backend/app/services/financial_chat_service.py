@@ -139,7 +139,7 @@ def summarize(db, uid, month, query, today):
 def handle_financial_chat(message, current_user, db):
     today = today_local()
     now = datetime.now(timezone.utc)
-    n = norm(message).strip().strip(".!")
+    n = norm(message).strip().strip(".!?")
     # Serialize confirmation and duplicate detection per authenticated account.
     user = db.query(User).filter(User.id == current_user.id).with_for_update().one()
     uid = user.id
