@@ -1,4 +1,3 @@
-import FinancialPlanning from '../components/FinancialPlanning'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
@@ -156,7 +155,6 @@ export default function SavingsGoals() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <FinancialPlanning month={new Date()} mode="reserve" />
       <ConfirmDialog
         open={!!pendingDelete}
         title="Excluir meta?"
