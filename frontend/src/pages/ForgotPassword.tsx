@@ -42,7 +42,7 @@ export default function ForgotPassword() {
             </div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Solicitação recebida</h2>
             <p className="text-sm text-gray-600 mb-6">
-              Se o e-mail <strong>{email}</strong> estiver cadastrado, enviaremos um link de recuperação. Verifique também a pasta de spam.
+              Se o e-mail <strong>{email}</strong> estiver cadastrado e o serviço de envio estiver disponível, você receberá um link de recuperação. Confira também a pasta de spam.
             </p>
             <div className="space-y-3">
               <Link
