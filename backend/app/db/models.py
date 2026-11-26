@@ -113,8 +113,8 @@ class Bill(Base):
     currency = Column(String(3), default="BRL")
     due_date = Column(Date, nullable=True)  # Nullable para permitir upload antes do OCR
     barcode = Column(String(255), nullable=True)
-    status = Column(Enum(BillStatus), default=BillStatus.PENDING)
-    type = Column(Enum(BillType), default=BillType.EXPENSE)  # expense ou income
+    status = Column(Enum(BillStatus, native_enum=False, length=20, values_callable=lambda cls: [member.value for member in cls]), default=BillStatus.PENDING)
+    type = Column(Enum(BillType, native_enum=False, length=20, values_callable=lambda cls: [member.value for member in cls]), default=BillType.EXPENSE)  # expense ou income
     is_bill = Column(Boolean, default=True)  # True se for boleto/documento, False se for transação manual
     confidence = Column(Float, default=0.0)
     category = Column(String(50), nullable=True)
