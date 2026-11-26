@@ -5,7 +5,8 @@ from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.services.financial_chat_parser import interpret, cents, plan_totals, occurs, item_key
+from app.services.financial_chat_parser import interpret, cents, plan_totals, occurs, item_key, occurrence_dates
+from app.services.financial_chat_intents import classify, Intent
 
 
 class FinancialChatParserTests(unittest.TestCase):
@@ -18,6 +19,10 @@ class FinancialChatParserTests(unittest.TestCase):
         self.assertEqual(cents("12.90"), 1290)
         with self.assertRaises(ValueError):
             cents("0")
+
+    def test_uuid_leading_with_number_is_a_payment_target(self):
+        self.assertEqual(classify("Paguei 123abcde-1833-1290-718f-4666312b5acc ontem"), Intent.PAY)
+        self.assertEqual(classify("Paguei 35 no mercado ontem"), Intent.REGISTER)
 
     def test_monthly_plan(self):
         items, issues = interpret("""RECEITA
@@ -76,6 +81,43 @@ REGRAS IMPORTANTES
         a, _ = interpret("Academia: R$ 150/mês, paga pelo meu pai", self.today)
         b, _ = interpret("academia: R$ 150,00 por mês, paga pelo meu pai", self.today)
         self.assertEqual(item_key(asdict(a[0])), item_key(asdict(b[0])))
+
+    def test_informal_batch_and_word_duration(self):
+        text = """RECEITAS
+- Contrato PJ: R$ 2.000 mensais durante seis meses.
+DESPESAS PRÓPRIAS
+- Moradia: R$ 40 mensais.
+DESPESAS PAGAS POR TERCEIROS
+- Academia: R$ 150 mensais.
+METAS
+- Guardar R$ 400 mensais.
+ORÇAMENTO
+- Lazer: limite de R$ 200 mensais."""
+        items, issues = interpret(text, self.today)
+        self.assertFalse(issues)
+        self.assertEqual(len(items), 5)
+        self.assertEqual(items[0].months, 6)
+        self.assertEqual(items[2].payer, "third")
+        self.assertEqual(items[3].kind, "reserve")
+        for message, description, amount, kind in [
+            ("Gastei 35 conto no Uber.", "Uber", 3500, "expense"),
+            ("Bota 50 reais de mercado.", "mercado", 5000, "expense"),
+            ("Recebi 2 mil do meu trabalho.", "Trabalho", 200000, "income"),
+        ]:
+            parsed, issues = interpret(message, self.today)
+            self.assertFalse(issues)
+            self.assertEqual((parsed[0].name, parsed[0].amount_cents, parsed[0].kind), (description, amount, kind))
+
+    def test_weekly_yearly_and_shared(self):
+        items, issues = interpret("""Transporte: R$ 20 por semana a partir de 01/12/2026 até 30/12/2026
+Curso: R$ 100 anual de 07/01/2027 até 07/01/2029
+Mercado: despesa compartilhada R$ 150, minha parte R$ 70, paga ontem""", self.today)
+        self.assertFalse(issues)
+        weekly, yearly, shared = map(asdict, items)
+        self.assertEqual(len(occurrence_dates(weekly)), 5)
+        self.assertEqual(plan_totals([weekly], "2026-12")["expense"], 10000)
+        self.assertEqual(len(occurrence_dates(yearly)), 3)
+        self.assertEqual(plan_totals([shared], "2026-11")["third_actual"], 8000)
 
 
 if __name__ == "__main__":

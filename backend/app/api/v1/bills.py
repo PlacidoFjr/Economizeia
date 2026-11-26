@@ -9,12 +9,13 @@ import uuid
 import logging
 
 from app.db.database import get_db
-from app.db.models import User, Bill, BillDocument, BillStatus, BillType
+from app.db.models import User, Bill, BillDocument, BillStatus, BillType, PaymentMethod
 from app.api.dependencies import get_current_user
 from app.services.ocr_service import ocr_service
 from app.services.ollama_service import ollama_service
 from app.services.storage_service import storage_service
 from app.services.audit_service import audit_service
+from app.services.bill_movements import add_manual_bill, record_payment
 from app.core.security import mask_cpf_cnpj
 from app.celery_app import celery_app
 from fastapi import Request
@@ -344,22 +345,19 @@ async def create_bill(
     default_issuer = "Receita Manual" if bill_type == BillType.INCOME else "Despesa Manual"
     
     # Create bill
-    bill = Bill(
-        id=uuid.uuid4(),
-        user_id=current_user.id,
+    bill = add_manual_bill(
+        db, current_user.id,
         issuer=bill_data.issuer or default_issuer,
         amount=bill_data.amount,
         currency=bill_data.currency,
         due_date=due_date,
         barcode=bill_data.barcode,
         status=bill_status,
-        type=bill_type,
+        bill_type=bill_type,
         is_bill=bill_data.is_bill if bill_data.is_bill is not None else False,  # False para transações manuais
-        confidence=1.0,  # Manual entry = 100% confidence
         category=bill_data.category
     )
     
-    db.add(bill)
     db.commit()
     db.refresh(bill)
     
@@ -576,12 +574,9 @@ async def mark_paid(
     request: Request = None
 ):
     """Mark bill as paid and upload receipt."""
-    from app.db.models import Payment, PaymentMethod, PaymentStatus
-    from datetime import datetime
-    
     bill = db.query(Bill).filter(
         and_(Bill.id == bill_id, Bill.user_id == current_user.id)
-    ).first()
+    ).with_for_update().first()
     
     if not bill:
         raise HTTPException(
@@ -589,21 +584,11 @@ async def mark_paid(
             detail="Boleto não encontrado"
         )
     
-    # Find or create payment
-    payment = db.query(Payment).filter(Payment.bill_id == bill.id).first()
-    if not payment:
-        payment = Payment(
-            id=uuid.uuid4(),
-            bill_id=bill.id,
-            user_id=current_user.id,
-            scheduled_date=bill.due_date,
-            method=PaymentMethod.PIX,  # Default
-            status=PaymentStatus.EXECUTED
-        )
-        db.add(payment)
-    
-    payment.executed_date = datetime.fromisoformat(executed_date).date()
-    payment.status = PaymentStatus.EXECUTED
+    try:
+        payment_date = date.fromisoformat(executed_date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Informe a data do pagamento no formato AAAA-MM-DD.")
+    payment = record_payment(db, bill, payment_date, default_method=PaymentMethod.PIX)
     
     # Upload comprovante if provided
     if comprovante:
@@ -612,7 +597,6 @@ async def mark_paid(
         s3_path = storage_service.upload_file(file_bytes, object_name, comprovante.content_type or "application/pdf")
         payment.comprovante_path = s3_path
     
-    bill.status = BillStatus.PAID
     db.commit()
     
     # Audit log
@@ -656,13 +640,6 @@ async def list_bills(
     bills = query.order_by(Bill.due_date).all()
     
     logger.info(f"Listando bills: is_bill={is_bill}, user_id={current_user.id}, total encontrado: {len(bills)}")
-    # Log detalhado para debug de receitas
-    income_count = sum(1 for b in bills if b.type == BillType.INCOME)
-    expense_count = sum(1 for b in bills if b.type == BillType.EXPENSE)
-    logger.info(f"  - Receitas (income): {income_count}, Despesas (expense): {expense_count}")
-    if logger.isEnabledFor(logging.DEBUG):
-        for bill in bills:
-            logger.debug(f"  - Bill ID: {bill.id}, Type: {bill.type.value if bill.type else 'None'}, Amount: {bill.amount}, IsBill: {bill.is_bill}, Status: {bill.status.value}")
     
     return [
         {
@@ -673,6 +650,7 @@ async def list_bills(
             "status": bill.status.value,
             "type": bill.type.value if bill.type else "expense",
             "is_bill": bill.is_bill if hasattr(bill, 'is_bill') else True,  # Retrocompatibilidade
+            "installment_group_id": str(bill.installment_group_id) if bill.installment_group_id else None,
             "category": bill.category,
             "confidence": bill.confidence
         }

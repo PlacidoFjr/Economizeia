@@ -1,6 +1,8 @@
 """Authenticated financial assistant. All writes require a server-side draft."""
 import logging
+import re
 from typing import Optional, List, Dict
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -9,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user
 from app.db.database import get_db
 from app.db.models import User
-from app.services.financial_chat_service import handle_financial_chat, monthly_financial_overview, today_local
+from app.services.financial_chat_service import clear_history, handle_financial_chat, monthly_financial_overview, read_history, user_today
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -18,32 +20,44 @@ router = APIRouter()
 class ChatMessage(BaseModel):
     message: str = Field(min_length=1, max_length=16000)
     conversation_history: Optional[List[Dict]] = None  # legacy client compatibility; never trusted for writes
+    request_id: Optional[UUID] = None
+    draft_id: Optional[str] = Field(default=None, max_length=64)
 
 
 class ChatResponse(BaseModel):
     response: str
     action: Optional[str] = None
     bill_id: Optional[str] = None
+    draft_id: Optional[str] = None
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat_with_assistant(chat_data: ChatMessage, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def chat_with_assistant(chat_data: ChatMessage, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        return handle_financial_chat(chat_data.message, current_user, db)
+        return handle_financial_chat(chat_data.message, current_user, db, chat_data.request_id, chat_data.draft_id)
     except HTTPException:
         db.rollback()
         raise
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        logger.exception("Financial chat request failed")
+        logger.error("Financial chat request failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=500, detail="Não foi possível processar a mensagem. Nenhuma alteração parcial foi salva.")
 
 
 @router.get("/overview")
 def financial_overview(month: Optional[str] = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    from datetime import date
-    import re
-    month = month or today_local().strftime("%Y-%m")
+    today = user_today(current_user)
+    month = month or today.strftime("%Y-%m")
     if not re.fullmatch(r"20\d{2}-(0[1-9]|1[0-2])", month):
         raise HTTPException(status_code=422, detail="Informe o mês no formato AAAA-MM.")
-    return monthly_financial_overview(db, current_user.id, month)
+    return monthly_financial_overview(db, current_user.id, month, today)
+
+
+@router.get("/history")
+def history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return read_history(db, current_user.id)
+
+
+@router.delete("/history", status_code=204)
+def delete_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    clear_history(db, current_user.id)

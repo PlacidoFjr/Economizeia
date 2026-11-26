@@ -8,9 +8,15 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 import re
 import unicodedata
+from calendar import monthrange
 
 MONTHS = ("janeiro fevereiro marco abril maio junho julho agosto setembro outubro novembro dezembro").split()
-MONEY = re.compile(r"(?<![\d.,])(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[,.]\d{1,2})?)(?![\d.,])", re.I)
+NAMED_MONTH = re.compile(r"\b(" + "|".join(MONTHS) + r")(?:\s+(?:de\s+)?(20\d{2}))?\b")
+LONG_DATE = re.compile(r"\b(?:dia\s+)?(\d{1,2})\s+de\s+(" + "|".join(MONTHS) + r")(?:\s+de\s+(20\d{2}))?\b")
+MONEY = re.compile(r"(?<![\d.,])(?:r\$\s*)?(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[,.]\d{1,2})?)(?!\d|[.,]\d)(?:\s+(mil)\b)?", re.I)
+NUMBER_WORDS = dict(zip("um dois tres quatro cinco seis sete oito nove dez onze doze".split(), range(1, 13)))
+COUNT = r"\d+|" + "|".join(NUMBER_WORDS)
+INSTALLMENTS = re.compile(r"\b(\d+)\s*(?:x|parcelas|vezes)\b")
 CATEGORIES = {
     "alimentacao": ("alimentacao", "proteina", "mercado", "lanche", "restaurante", "ifood", "padaria"),
     "moradia": ("moradia", "aluguel", "energia", "luz", "internet", "condominio", "agua"),
@@ -27,12 +33,12 @@ def norm(text):
     return "".join(c for c in unicodedata.normalize("NFKD", text.lower()) if not unicodedata.combining(c))
 
 
-def cents(raw):
+def cents(raw, multiplier=1):
     raw = raw.replace(".", "").replace(",", ".") if "," in raw else raw
     if re.fullmatch(r"\d{1,3}(?:\.\d{3})+", raw):
         raw = raw.replace(".", "")
     try:
-        value = Decimal(raw)
+        value = Decimal(raw) * multiplier
         if not value.is_finite() or not 0 < value <= Decimal("100000000"):
             raise ValueError("valor fora do limite")
         return int((value * 100).quantize(Decimal("1")))
@@ -66,15 +72,18 @@ def get_month(text, today):
         return month_add(today.strftime("%Y-%m"), -1)
     if "proximo mes" in n or "mes que vem" in n:
         return month_add(today.strftime("%Y-%m"), 1)
-    for i, m in enumerate(MONTHS, 1):
-        if re.search(r"\b" + m + r"\b", n):
-            year = re.search(r"\b20\d{2}\b", n)
-            return f"{int(year.group()) if year else today.year:04d}-{i:02d}"
+    name = NAMED_MONTH.search(n)
+    if name:
+        return f"{int(name.group(2) or today.year):04d}-{MONTHS.index(name.group(1)) + 1:02d}"
     return today.strftime("%Y-%m")
 
 
 def get_day(text, today):
     n = norm(text)
+    if re.search(r"\bdepois de amanha\b", n):
+        return today + timedelta(days=2)
+    if re.search(r"\banteontem\b", n):
+        return today - timedelta(days=2)
     if re.search(r"\bontem\b", n):
         return today - timedelta(days=1)
     if re.search(r"\bamanha\b", n):
@@ -87,6 +96,12 @@ def get_day(text, today):
     match = re.search(r"\b(\d{1,2})/(\d{1,2})(?:/(20\d{2}))?\b", n)
     if match:
         return date(int(match.group(3) or today.year), int(match.group(2)), int(match.group(1)))
+    match = LONG_DATE.search(n)
+    if match:
+        return date(int(match.group(3) or today.year), MONTHS.index(match.group(2)) + 1, int(match.group(1)))
+    match = re.search(r"\bdia\s+(\d{1,2})\b", n)
+    if match:
+        return date.fromisoformat(get_month(text, today) + f"-{int(match.group(1)):02d}")
     return None
 
 
@@ -102,26 +117,82 @@ class Item:
     months: int | None = None
     category: str = "outras"
     account: str | None = None
+    payer_name: str | None = None
+    until: str | None = None
+    installments: int | None = None
+    personal_cents: int | None = None
+    goal: bool = False
+
+
+def money_matches(text):
+    text = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/20\d{2})?\b", "", text)
+    text = LONG_DATE.sub("", text)
+    text = re.sub(r"\bdia\s+\d{1,2}\b", "", text)
+    text = re.sub(r"\b\d+\s*(?:dias?|semanas?|mes(?:es)?|anos?|parcelas?|vezes|x)\b", "", text)
+    text = re.sub(r"\b(" + "|".join(MONTHS) + r")(?:\s+de)?\s+20\d{2}\b", r"\1", text)
+    return text, list(MONEY.finditer(text))
+
+
+def responsible_party(text):
+    match = re.search(r"\b(?:pago[sa]?|paga[sa]?|dividid[oa])\s+(?:pelo|pela|por|com)\s+([^,.;]+)", text)
+    value = match.group(1) if match else ""
+    subject = re.search(r"\b(meu pai|minha mae|meu irmao|minha irma|meu parceiro|minha parceira|terceiros)\b", text)
+    if subject:
+        return subject.group()
+    if value and not re.match(r"(?:mim|mes)\b", value):
+        return re.split(r"\s+(?:hoje|ontem|amanha|em|no|na|todo|por)\b|\s+r\$", value)[0][:100].strip()
+    return None
+
+
+def occurrence_dates(item):
+    """Return explicitly dated occurrences for a finite commitment."""
+    if not item.get("day"):
+        return []
+    first = date.fromisoformat(item["day"])
+    count = item.get("installments") or item.get("months")
+    if count:
+        step = 12 if item["frequency"] == "yearly" else 1
+        dates = []
+        for index in range(count):
+            year, month = map(int, month_add(first.strftime("%Y-%m"), step * index).split("-"))
+            dates.append(date(year, month, min(first.day, monthrange(year, month)[1])))
+        return dates
+    if item["frequency"] == "once":
+        return [first]
+    if not item.get("until"):
+        return []
+    end = date.fromisoformat(item["until"])
+    if item["frequency"] == "weekly":
+        return [first + timedelta(weeks=index) for index in range((end - first).days // 7 + 1)]
+    month_count = (end.year - first.year) * 12 + end.month - first.month
+    step = 12 if item["frequency"] == "yearly" else 1
+    return [day for day in occurrence_dates(dict(item, months=month_count // step + 1)) if day <= end]
+
+
+def installment_amounts(total, count):
+    amount, remainder = divmod(total, count)
+    return [amount + (index < remainder) for index in range(count)]
 
 
 def interpret(message, today):
     """Return draft items and unresolved lines; never mutate storage."""
     items, unresolved = [], []
-    section, owner, monthly = "", "self", False
+    section, owner, monthly, section_payer = "", "self", False, None
     account = None
-    lines = re.split(r"\n|;", message)
+    lines = re.split(r"\r?\n|;(?!\s*minha parte\b)", message, flags=re.I)
     for raw in lines:
         line = raw.strip().strip("*").strip()
         if not line:
             continue
-        line = re.sub(r"^\s*[-•]\s*", "", line).replace("**", "")
+        line = re.sub(r"^\s*(?:[-•]\s*|\d+[.)]\s+)", "", line).replace("**", "")
         n = norm(line)
         # Section headers carry context, but instructions/totals do not become money.
         if re.match(r"^(regras|objetivo|instrucoes|observacoes)\b", n) and not MONEY.search(n):
             section = "ignore"
             continue
         if re.match(r"^(minha renda|receitas?|renda|despesas|gastos|meus gastos|orcamento|metas|compromissos|dividas|pagos por)", n) and not MONEY.search(n) and len(n) < 100:
-            owner = "third" if re.search(r"pai|mae|terceiro|outras pessoas", n) else "self"
+            section_payer = responsible_party(n)
+            owner = "third" if section_payer or re.search(r"terceiro|outras pessoas", n) else "self"
             monthly = "mens" in n or n.startswith(("minha renda", "renda", "receita", "despesas pagas", "meus gastos", "orcamento"))
             section = "income" if n.startswith(("minha renda", "renda", "receita")) else ("budget" if n.startswith(("orcamento", "meta")) else "expense")
             if n.startswith(("compromissos", "dividas")):
@@ -147,17 +218,22 @@ def interpret(message, today):
         if re.match(r"^\d+\.\s", n) and "r$" not in n:
             continue
         # Dates and installment counts are not monetary amounts.
-        stripped = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/20\d{2})?\b", "", n)
-        stripped = re.sub(r"\b\d+\s*(?:mes(?:es)?|parcelas?|vezes|x)\b", "", stripped)
-        stripped = re.sub(r"\b20\d{2}\b", "", stripped)
-        matches = list(MONEY.finditer(stripped))
+        stripped, matches = money_matches(n)
         if not matches:
             if re.search(r"\b(gastei|paguei|recebi|ganhei|registrar|cadastrar|despesa|receita)\b", n):
                 unresolved.append(line)
             continue
-        if re.search(r"\b(?:\d+\s*(?:x|parcelas?|vezes)|parcelad[oa])\b", n):
-            unresolved.append(line + " (informe cada parcela, valor e vencimento separadamente)")
-            continue
+        split = INSTALLMENTS.search(n)
+        shared = bool(re.search(r"\b(?:compartilhad[oa]|dividid[oa]|divido|minha parte)\b", n))
+        personal = None
+        if shared and len(matches) == 2:
+            share = re.search(r"\bminha parte\b", stripped)
+            if share and matches[0].end() < share.start() < matches[1].start():
+                try:
+                    personal = cents(matches[1].group(1), 1000 if matches[1].group(2) else 1)
+                    matches = matches[:1]
+                except ValueError:
+                    pass
         if len(matches) > 1:
             # Explicit month-by-month amounts: repeat the name with each amount.
             segments = re.split(r"\s+e\s+(?=r\$\s*\d)", line, flags=re.I)
@@ -174,35 +250,62 @@ def interpret(message, today):
             unresolved.append(line + " (valor negativo ou ambiguo)")
             continue
         try:
-            amount = cents(match.group(1))
+            amount = cents(match.group(1), 1000 if match.group(2) else 1)
             day = get_day(line, today)
+            end = re.search(r"\b(?:ate|termina em)\s+(20\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/20\d{2})?)\b", n)
+            until = get_day(end.group(1), today) if end else None
         except (ValueError, OverflowError):
             unresolved.append(line + " (valor ou data invalida)")
             continue
         has_month = any(re.search(r"\b" + m + r"\b", n) for m in MONTHS) or "proximo mes" in n or "mes passado" in n
-        is_monthly = bool(re.search(r"mensal|por mes|/mes|todo mes|cada mes", n)) or (monthly and not has_month and not day)
-        duration = re.search(r"\b(\d+)\s*mes(?:es)?\b", n)
-        months = int(duration.group(1)) if duration else None
+        is_weekly = bool(re.search(r"semanal|por semana|toda semana|cada semana", n))
+        is_yearly = bool(re.search(r"anual|por ano|todo ano|cada ano", n))
+        habitual_third = bool(re.search(r"\b(?:meu pai|minha mae|meu irmao|minha irma) paga (?:minha|meu)\b", n))
+        is_monthly = bool(re.search(r"mens(?:al|ais)|por mes|/mes|todo mes|cada mes", n)) or (
+            (monthly or habitual_third) and not has_month and not day and not is_weekly and not is_yearly
+        )
+        duration = re.search(r"\b(" + COUNT + r")\s*mes(?:es)?\b", n)
+        months = (NUMBER_WORDS.get(duration.group(1)) or int(duration.group(1))) if duration else None
         if months is not None and not 1 <= months <= 120:
             unresolved.append(line + " (duracao invalida)")
             continue
-        payer = "third" if re.search(r"pag[ao]s? (?:pelo|pela|por)|meu pai|minha mae|terceiros", n) else owner
+        payer_name = responsible_party(n) or section_payer
+        payer = "shared" if shared else "third" if payer_name else owner
         if re.search(r"por mim|eu pago", n):
-            payer = "self"
-        if re.search(r"\b(reserva|guardar|poupar|economizar)\b", n) and not re.search(r"\b(gastei|paguei)\b", n):
+            if not shared:
+                payer, payer_name = "self", None
+        if re.search(r"\b(reserva|guardar|poupar|economizar|meta)\b", n) and not re.search(r"\b(gastei|paguei)\b", n):
             kind = "reserve"
         elif re.search(r"\b(limite|orcamento|teto)\b", n) or section == "budget":
             kind = "budget"
-        elif re.search(r"\b(recebi|ganhei|salario|receita|renda|contrato pj|freelance|freela)\b", n) or section == "income":
+        elif re.search(r"\b(recebi|receby|ganhei|receber|salario|receita|renda|contrato pj|freelance|freela)\b", n) or section == "income":
             kind = "income"
         else:
             kind = "expense"
-        actual = bool(re.search(r"\b(gastei|paguei|comprei|recebi|ganhei|pago|pagou|recebido|ja paga)\b", n)) and not is_monthly and not re.search(r"\b(previsto|prevista|planejado|planejada|futuro|vou|limite)\b", n)
+        installment_count = int(split.group(1)) if split else None
+        recurring = is_monthly or is_weekly or is_yearly
+        actual_signal = re.search(r"\b(gastei|paguei|comprei|recebi|ganhei|pago|pagou|recebido|ja paga|bota|coloca|lanca|gaste|receby)\b", n)
+        actual = bool(actual_signal or day and day <= today and re.search(r"\bpaga\b", n)) and not recurring and not split and not re.search(r"\b(previsto|prevista|planejado|planejada|futuro|vou|limite|vence|vencimento)\b", n)
         if re.search(r"\bnao\s+(?:gastei|paguei|pagou|pago|recebi|ganhei|comprei)\b", n):
             unresolved.append(line + " (confirme se a despesa ou receita e apenas prevista)")
             continue
         if kind in ("reserve", "budget"):
             actual = False
+        if installment_count is not None and (kind != "expense" or payer != "self" or recurring or day is None or not 2 <= installment_count <= min(amount, 120)):
+            unresolved.append(line + " (informe entre 2 e 120 parcelas e a data do primeiro vencimento)")
+            continue
+        if not split and re.search(r"\bparcelad[oa]\b", n):
+            unresolved.append(line + " (informe o número de parcelas e a data do primeiro vencimento)")
+            continue
+        if shared and (personal is None or not 0 < personal < amount or kind != "expense"):
+            unresolved.append(line + " (informe o total e o valor da sua parte)")
+            continue
+        if until and (not day or until < day or (until - day).days > 3660 or months):
+            unresolved.append(line + " (confira o início e o término da recorrência)")
+            continue
+        if (is_weekly and (not day or months)) or (is_yearly and months):
+            unresolved.append(line + " (informe a data de início e, se houver, a data de término)")
+            continue
         if actual and day is None and not has_month:
             day = today
         if actual and day is None:
@@ -211,48 +314,99 @@ def interpret(message, today):
         if actual and day > today:
             unresolved.append(line + " (data futura: especifique que e previsto)")
             continue
-        if not actual and not is_monthly and day is None and not has_month:
+        goal = kind == "reserve" and not recurring and bool(re.search(r"\bmeta\b", n) or day and re.search(r"\bate\b", n))
+        if not actual and not recurring and day is None and not has_month and not goal:
             # Do not infer the due date of a commitment.
             unresolved.append(line + " (informe o mes, a data ou se e mensal)")
             continue
         if ":" in line:
             name = line.split(":", 1)[0].strip()
         else:
-            name = re.sub(r"(?i)r\$\s*", "", line)
-            name = re.sub(r"(?i)\b\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?\b|\b\d+(?:[,.]\d{1,2})?\b", "", name)
-            name = re.sub(r"(?i)\b(gastei|paguei|comprei|recebi|ganhei|adicionar|registrar|cadastrar|planejar|despesa|receita|reais|hoje|ontem|amanhã|de|no|na|em|para|com|mensal|mensais)\b", " ", name)
+            name = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/20\d{2})?\b", "", line)
+            name = re.sub(r"(?i)\b(?:vou|meu pai|minha mãe|meu irmão)\s+(?:receber|pagar|pagou|paga)\b", "", name)
+            name = re.sub(r"(?i)\b(?:durante|por)\s+(?:" + COUNT + r")\s+mes(?:es)?\b|\b(?:em\s+)?\d+\s*(?:x|parcelas|vezes)\b", "", name)
+            name = MONEY.sub("", name)
+            name = re.sub(r"(?i)\b(?:por mês|todo mês|cada mês|primeiro vencimento|primeira parcela|que custa|meu trabalho)\b", lambda m: "Trabalho" if m.group().lower() == "meu trabalho" else "", name)
+            name = re.sub(r"(?i)\b(gastei|gaste|paguei|comprei|recebi|receby|ganhei|vou|receber|bota|coloca|lança|adicionar|registrar|cadastrar|planejar|despesa|receita|reais|conto[s]?|hoje|ontem|amanhã|mensal|mensais)\b", " ", name)
+            name = re.sub(r"(?i)^\s*(?:(?:de|do|da|no|na|em|para|com|minha|meu|uma|um)\s+)+", "", name)
+            name = re.sub(r"(?i)(?:\s+(?:em|no|na|para|com|começando|até|dia|de))+\s*[.,]*\s*$", "", name)
             name = re.sub(r"\s+", " ", name).strip(" -/.,")
+        if not name and kind == "income" and recurring:
+            name = "Receita prevista"
         if not name or len(name) > 180 or norm(name) in {"gasto", "boleto", "conta", "valor"}:
             unresolved.append(line + " (informe a descricao)")
             continue
-        if payer == "third" and kind in ("income", "reserve", "budget"):
+        if payer != "self" and kind in ("income", "reserve", "budget"):
             unresolved.append(line + " (confirme a responsabilidade e o tipo)")
             continue
+        if goal and day and day < today:
+            unresolved.append(line + " (a data da meta precisa ser hoje ou posterior)")
+            continue
+        frequency = "weekly" if is_weekly else "yearly" if is_yearly else "monthly" if is_monthly else "once"
         items.append(Item(name=name, amount_cents=amount, kind=kind, payer=payer,
-                          frequency="actual" if actual else ("monthly" if is_monthly else "once"),
+                          frequency="actual" if actual else frequency,
                           month=day.strftime("%Y-%m") if day else get_month(line, today),
                           day=day.isoformat() if day else None, months=months if is_monthly else None,
-                          category=category(name, kind), account=account if kind == "income" else None))
+                          category=category(name, kind), account=account if kind == "income" else None,
+                          payer_name=payer_name, until=until.isoformat() if until else None,
+                          installments=installment_count, personal_cents=personal, goal=goal))
     return items, unresolved
 
 
+def occurrence_count(item, month):
+    frequency = item["frequency"]
+    if month < item["month"] or item.get("until") and month > item["until"][:7]:
+        return 0
+    if frequency == "monthly":
+        return int(not item.get("months") or month < month_add(item["month"], item["months"]))
+    if frequency == "yearly":
+        return int(month[-2:] == item["month"][-2:])
+    if frequency == "weekly":
+        start = date.fromisoformat(item["day"])
+        first = date.fromisoformat(month + "-01")
+        end = date.fromisoformat(month_add(month, 1) + "-01") - timedelta(days=1)
+        if item.get("until"):
+            end = min(end, date.fromisoformat(item["until"]))
+        next_day = start + timedelta(weeks=max(0, ((first - start).days + 6) // 7))
+        return max(0, (end - next_day).days // 7 + 1)
+    return int(item["month"] == month)
+
+
 def occurs(item, month):
-    if item["frequency"] != "monthly":
-        return item["month"] == month
-    return item["month"] <= month and (not item.get("months") or month < month_add(item["month"], item["months"]))
+    return occurrence_count(item, month) > 0
+
+
+def due_dates_in_month(item, month):
+    count = occurrence_count(item, month)
+    if not item.get("day") or count == 0:
+        return []
+    start = date.fromisoformat(item["day"])
+    year, number = map(int, month.split("-"))
+    if item["frequency"] == "weekly":
+        first = date(year, number, 1)
+        next_day = start + timedelta(weeks=max(0, ((first - start).days + 6) // 7))
+        return [next_day + timedelta(weeks=index) for index in range(count)]
+    return [date(year, number, min(start.day, monthrange(year, number)[1]))]
 
 
 def plan_totals(items, month):
     out = dict(income=0, expense=0, third=0, budget=0, reserve=0, third_actual=0)
     for item in items:
-        if not occurs(item, month):
+        count = occurrence_count(item, month)
+        if not count:
             continue
+        total = item["amount_cents"] * count
+        personal = item.get("personal_cents")
         if item["frequency"] == "actual":
-            if item["kind"] == "expense" and item["payer"] == "third":
-                out["third_actual"] += item["amount_cents"]
+            if item["kind"] == "expense" and item["payer"] in ("third", "shared"):
+                out["third_actual"] += total - (personal or 0)
+            continue
+        if item["payer"] == "shared":
+            out["expense"] += personal * count
+            out["third"] += total - personal * count
             continue
         key = "third" if item["payer"] == "third" else item["kind"]
-        out[key] += item["amount_cents"]
+        out[key] += total
     return out
 
 

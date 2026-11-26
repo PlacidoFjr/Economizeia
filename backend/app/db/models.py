@@ -118,6 +118,7 @@ class Bill(Base):
     is_bill = Column(Boolean, default=True)  # True se for boleto/documento, False se for transação manual
     confidence = Column(Float, default=0.0)
     category = Column(String(50), nullable=True)
+    installment_group_id = Column(UUID(as_uuid=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -148,7 +149,7 @@ class Payment(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     scheduled_date = Column(Date, nullable=False)
     executed_date = Column(Date, nullable=True)
-    method = Column(Enum(PaymentMethod), nullable=False)
+    method = Column(Enum(PaymentMethod), nullable=True)
     status = Column(Enum(PaymentStatus), default=PaymentStatus.SCHEDULED)
     comprovante_path = Column(String(500), nullable=True)
     notify_before_days = Column(JSONB, default=[7, 3, 1])
@@ -198,7 +199,7 @@ class SavingsGoal(Base):
     name = Column(String(255), nullable=False)  # Nome da meta (ex: "Viagem para Europa")
     target_amount = Column(Float, nullable=False)  # Valor que quer guardar
     current_amount = Column(Float, default=0.0)  # Valor já guardado
-    deadline = Column(Date, nullable=False)  # Data limite
+    deadline = Column(Date, nullable=True)  # Data limite opcional
     description = Column(Text, nullable=True)  # Descrição opcional
     status = Column(Enum(SavingsGoalStatus), default=SavingsGoalStatus.ACTIVE)
     notify_days_before = Column(JSONB, default=[30, 15, 7, 3, 1])  # Dias antes para avisar

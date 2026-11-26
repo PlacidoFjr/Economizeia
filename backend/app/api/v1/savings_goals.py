@@ -5,13 +5,13 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date, datetime, timedelta
 from uuid import UUID
-import uuid
 
 from app.db.database import get_db
 from app.db.models import User, SavingsGoal, SavingsGoalStatus
 from app.api.dependencies import get_current_user
 from app.services.notification_service import notification_service
 from app.services.audit_service import audit_service
+from app.services.savings_goal_records import add_savings_goal
 from fastapi import Request
 
 router = APIRouter()
@@ -20,7 +20,7 @@ router = APIRouter()
 class SavingsGoalCreate(BaseModel):
     name: str
     target_amount: float
-    deadline: str  # YYYY-MM-DD
+    deadline: Optional[str] = None  # YYYY-MM-DD
     description: Optional[str] = None
     notify_days_before: Optional[List[int]] = [30, 15, 7, 3, 1]
 
@@ -40,11 +40,11 @@ class SavingsGoalResponse(BaseModel):
     name: str
     target_amount: float
     current_amount: float
-    deadline: str
+    deadline: Optional[str]
     description: Optional[str]
     status: str
     progress_percentage: float
-    days_remaining: int
+    days_remaining: Optional[int]
     notify_days_before: List[int]
     created_at: str
     updated_at: Optional[str]
@@ -58,27 +58,23 @@ async def create_savings_goal(
     request: Request = None
 ):
     """Criar uma nova meta de economia."""
-    deadline = datetime.fromisoformat(goal_data.deadline).date()
+    deadline = datetime.fromisoformat(goal_data.deadline).date() if goal_data.deadline else None
     
-    if deadline < date.today():
+    if deadline and deadline < date.today():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A data limite não pode ser no passado"
         )
     
-    goal = SavingsGoal(
-        id=uuid.uuid4(),
-        user_id=current_user.id,
+    goal = add_savings_goal(
+        db, current_user.id,
         name=goal_data.name,
         target_amount=goal_data.target_amount,
-        current_amount=0.0,
         deadline=deadline,
         description=goal_data.description,
-        status=SavingsGoalStatus.ACTIVE,
         notify_days_before=goal_data.notify_days_before
     )
     
-    db.add(goal)
     db.commit()
     db.refresh(goal)
     
@@ -97,7 +93,7 @@ async def create_savings_goal(
         "name": goal.name,
         "target_amount": goal.target_amount,
         "current_amount": goal.current_amount,
-        "deadline": goal.deadline.isoformat(),
+        "deadline": goal.deadline.isoformat() if goal.deadline else None,
         "status": goal.status.value
     }
 
@@ -120,14 +116,14 @@ async def list_savings_goals(
     result = []
     
     for goal in goals:
-        days_remaining = (goal.deadline - today).days
+        days_remaining = (goal.deadline - today).days if goal.deadline else None
         progress = (goal.current_amount / goal.target_amount * 100) if goal.target_amount > 0 else 0
         
         # Atualizar status se necessário
         if goal.status == SavingsGoalStatus.ACTIVE:
             if goal.current_amount >= goal.target_amount:
                 goal.status = SavingsGoalStatus.COMPLETED
-            elif days_remaining < 0:
+            elif days_remaining is not None and days_remaining < 0:
                 goal.status = SavingsGoalStatus.EXPIRED
         
         result.append({
@@ -135,7 +131,7 @@ async def list_savings_goals(
             "name": goal.name,
             "target_amount": goal.target_amount,
             "current_amount": goal.current_amount,
-            "deadline": goal.deadline.isoformat(),
+            "deadline": goal.deadline.isoformat() if goal.deadline else None,
             "description": goal.description,
             "status": goal.status.value,
             "progress_percentage": round(progress, 2),
@@ -167,7 +163,7 @@ async def get_savings_goal(
         )
     
     today = date.today()
-    days_remaining = (goal.deadline - today).days
+    days_remaining = (goal.deadline - today).days if goal.deadline else None
     progress = (goal.current_amount / goal.target_amount * 100) if goal.target_amount > 0 else 0
     
     return {
@@ -175,7 +171,7 @@ async def get_savings_goal(
         "name": goal.name,
         "target_amount": goal.target_amount,
         "current_amount": goal.current_amount,
-        "deadline": goal.deadline.isoformat(),
+        "deadline": goal.deadline.isoformat() if goal.deadline else None,
         "description": goal.description,
         "status": goal.status.value,
         "progress_percentage": round(progress, 2),
@@ -214,9 +210,9 @@ async def update_savings_goal(
         # Verificar se completou
         if goal.current_amount >= goal.target_amount and goal.status == SavingsGoalStatus.ACTIVE:
             goal.status = SavingsGoalStatus.COMPLETED
-    if goal_data.deadline:
-        deadline = datetime.fromisoformat(goal_data.deadline).date()
-        if deadline < date.today():
+    if "deadline" in goal_data.model_fields_set:
+        deadline = datetime.fromisoformat(goal_data.deadline).date() if goal_data.deadline else None
+        if deadline and deadline < date.today():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="A data limite não pode ser no passado"
@@ -243,7 +239,7 @@ async def update_savings_goal(
     )
     
     today = date.today()
-    days_remaining = (goal.deadline - today).days
+    days_remaining = (goal.deadline - today).days if goal.deadline else None
     progress = (goal.current_amount / goal.target_amount * 100) if goal.target_amount > 0 else 0
     
     return {
@@ -251,7 +247,7 @@ async def update_savings_goal(
         "name": goal.name,
         "target_amount": goal.target_amount,
         "current_amount": goal.current_amount,
-        "deadline": goal.deadline.isoformat(),
+        "deadline": goal.deadline.isoformat() if goal.deadline else None,
         "description": goal.description,
         "status": goal.status.value,
         "progress_percentage": round(progress, 2),
@@ -304,7 +300,7 @@ async def add_amount_to_goal(
     )
     
     today = date.today()
-    days_remaining = (goal.deadline - today).days
+    days_remaining = (goal.deadline - today).days if goal.deadline else None
     progress = (goal.current_amount / goal.target_amount * 100) if goal.target_amount > 0 else 0
     
     return {

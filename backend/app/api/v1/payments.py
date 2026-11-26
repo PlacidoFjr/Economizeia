@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
+from sqlalchemy import and_, case
 from typing import Optional
 from uuid import UUID
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from app.db.database import get_db
 from app.db.models import User, Payment, Bill, PaymentStatus
@@ -17,6 +17,8 @@ router = APIRouter()
 @router.get("")
 async def list_payments(
     status: Optional[str] = None,
+    from_date: Optional[date] = None,
+    to_date: Optional[date] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -26,7 +28,15 @@ async def list_payments(
     if status:
         query = query.filter(Payment.status == PaymentStatus(status))
     
-    payments = query.order_by(Payment.scheduled_date.desc()).all()
+    activity_date = case(
+        (and_(Payment.status == PaymentStatus.EXECUTED, Payment.executed_date.isnot(None)), Payment.executed_date),
+        else_=Payment.scheduled_date,
+    )
+    if from_date:
+        query = query.filter(activity_date >= from_date)
+    if to_date:
+        query = query.filter(activity_date <= to_date)
+    payments = query.order_by(activity_date.desc()).all()
     
     return [
         {
@@ -34,7 +44,7 @@ async def list_payments(
             "bill_id": str(payment.bill_id),
             "scheduled_date": payment.scheduled_date.isoformat() if payment.scheduled_date else None,
             "executed_date": payment.executed_date.isoformat() if payment.executed_date else None,
-            "method": payment.method.value,
+            "method": payment.method.value if payment.method else None,
             "status": payment.status.value,
             "amount": payment.bill.amount if payment.bill else None
         }
