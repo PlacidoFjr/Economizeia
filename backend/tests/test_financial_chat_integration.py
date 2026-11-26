@@ -299,6 +299,25 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")["actual"], 0)
 
 
+    def test_legacy_lowercase_status_does_not_break_dashboard_after_migration(self):
+        from sqlalchemy import text
+        from app.db.enum_compatibility import normalize_legacy_enum_labels
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TYPE billstatus ADD VALUE IF NOT EXISTS 'paid'"))
+            conn.execute(text("ALTER TYPE billtype ADD VALUE IF NOT EXISTS 'expense'"))
+        bid = uuid.uuid4()
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO bills (id, user_id, issuer, amount, due_date, status, type, is_bill) "
+                "VALUES (:id, :uid, 'Legacy test', 12, '2026-11-25', 'paid', 'expense', false)"
+            ), {"id": bid, "uid": self.uid})
+        normalize_legacy_enum_labels(engine, Base.metadata)
+        self.assertEqual(normalize_legacy_enum_labels(engine, Base.metadata), 0)
+        overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+        self.assertEqual(overview["actual"]["expense"], 1200)
+        self.assertEqual(overview["actual"]["balance"], -1200)
+        self.assertEqual(self.db.get(Bill, bid).status, BillStatus.PAID)
+
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")
         self.chat("sim")

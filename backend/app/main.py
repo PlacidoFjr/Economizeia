@@ -28,6 +28,10 @@ def migrate_financial_records(database_engine=engine):
 
 migrate_financial_records()
 
+from app.db.enum_compatibility import normalize_legacy_enum_labels
+normalized_labels = normalize_legacy_enum_labels(engine, Base.metadata)
+logger.info("Normalized %s legacy enum labels", normalized_labels)
+
 # Executar migrations necessárias
 def run_migrations():
     """Executa migrations SQL necessárias."""
