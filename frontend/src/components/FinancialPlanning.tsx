@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import api from '../services/api'
+import type { SpendingCategory } from './MonthlySpending'
 import FinancialPlanManager from './FinancialPlanManager'
 
 type Item = { id: string; name: string; amount_cents: number; kind: 'income' | 'expense' | 'budget' | 'reserve'; payer: string; payer_name?: string; shared?: boolean; frequency: string; month: string; day?: string; months?: number; occurrence_count?: number }
 export type FinancialActivityRow = { id: string; name: string; amount_cents: number; day: string; type: 'expense' | 'income'; status: string; category?: string }
 type FinancialActivity = { categories: Record<string, number>; issuers: Record<string, number>; trend: { month: string; income: number; expense: number }[]; open_count: number; overdue_count: number; upcoming: FinancialActivityRow[]; planned_due?: FinancialActivityRow[]; recent: FinancialActivityRow[] }
-type Overview = { month: string; actual: { income: number; expense: number; third: number; balance: number; pending: number }; planned: { income: number; expense: number; third: number; budget: number; reserve: number; available: number; cost_of_living: number }; items: Item[]; activity?: FinancialActivity }
+type Overview = { spending?: SpendingCategory[]; month: string; actual: { income: number; expense: number; third: number; balance: number; pending: number }; planned: { income: number; expense: number; third: number; budget: number; reserve: number; available: number; cost_of_living: number }; items: Item[]; activity?: FinancialActivity }
 export const financialMoney = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const money = financialMoney
 const label = (month: string) => new Date(month + '-01T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })

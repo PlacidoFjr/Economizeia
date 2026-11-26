@@ -1,3 +1,4 @@
+import MonthlySpending from '../components/MonthlySpending'
 import FinancialPlanning from '../components/FinancialPlanning'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -159,6 +160,7 @@ export default function Finances() {
           </Link>
         </div>
       </div>
+      <MonthlySpending month={selectedMonth} />
       <FinancialPlanning month={selectedMonth} />
 
       {/* Filtros */}
