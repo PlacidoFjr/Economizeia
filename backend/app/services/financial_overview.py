@@ -70,7 +70,7 @@ def overview_from_data(data, month, today, history=False):
     income = total(bill for bill in movements if bill.type == BillType.INCOME)
     expense = total(expenses)
     pending = open_in_month(bills, month)
-    realized_by_id = {str(bill.id): money_cents(bill.amount) for bill in movements}
+    realized_ids = {str(bill.id) for bill in movements}
     forecast = dict(income=0, expense=0, third=0, budget=0, reserve=0, third_actual=0)
     items = []
     for row in plans:
@@ -79,7 +79,7 @@ def overview_from_data(data, month, today, history=False):
         if not count:
             continue
         linked = item.get("settled", {}).get(month, [])
-        remaining_count = count - sum(realized_by_id.get(key) == item["amount_cents"] for key in linked)
+        remaining_count = count - sum(key in realized_ids for key in linked)
         if remaining_count <= 0:
             continue
         if not item.get("materialized"):

@@ -186,5 +186,5 @@ def apply_item(db, uid, item, plan_model):
         existing = plan.data.get("settled", {})
         plan.data = dict(plan.data, settled={**existing, item["month"]: [*existing.get(item["month"], []), *output]})
     if item["frequency"] in ("weekly", "monthly", "yearly"):
-        db.add(plan_model(user_id=uid, data=dict(item, materialized=True)))
+        db.add(plan_model(user_id=uid, data=dict(item, materialized=True, generated_bill_ids=output)))
     return output

@@ -165,6 +165,80 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(overview["planned"]["income"], 0)
         self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-12")["planned"]["income"], 200000)
 
+    def test_edit_plan_api_updates_dashboard_and_checks_ownership(self):
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from app.api.v1.chatbot import router
+        from app.core.security import create_access_token
+
+        self.chat("Salário visão: R$ 2.000 previstos por mês")
+        self.chat("sim")
+        self.chat("Salario depositado visão 2000 mensal")
+        self.chat("sim")
+        self.chat("Limite lazer: R$ 200 previsto mensal em dezembro")
+        self.chat("sim")
+
+        app = FastAPI()
+        app.include_router(router)
+        auth = {"Authorization": "Bearer " + create_access_token({"sub": str(self.uid)})}
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/plan-items").status_code, 403)
+            items = client.get("/plan-items", headers=auth).json()
+            income = next(item for item in items if item["kind"] == "income")
+            budget = next(item for item in items if item["kind"] == "budget")
+            self.assertEqual(budget["month"], "2026-12")
+
+            income_id = income.pop("id")
+            income.pop("shared")
+            income.update(name="Novo salário", amount_cents=230000, account="Conta principal")
+            url = "/plan-items/" + income_id
+            saved = client.put(url, json=income, headers=auth)
+            self.assertEqual(saved.status_code, 200, saved.text)
+            self.assertEqual(client.put(url, json=income, headers=auth).status_code, 409)
+            missing = client.put("/plan-items/" + str(uuid.uuid4()), json=income, headers=auth)
+            self.assertEqual(missing.status_code, 404)
+            other = User(id=uuid.uuid4(), name="Other", email=f"{uuid.uuid4()}@example.invalid",
+                         password_hash="test-only", email_verified=True, is_active=True)
+            self.db.add(other)
+            self.db.commit()
+            outsider = {"Authorization": "Bearer " + create_access_token({"sub": str(other.id)})}
+            self.assertEqual(client.get("/plan-items", headers=outsider).json(), [])
+            self.assertEqual(client.delete(url, headers=outsider, params={"version": saved.json()["version"]}).status_code, 404)
+
+            november = client.get("/overview?month=2026-11", headers=auth).json()
+            december = client.get("/overview?month=2026-12", headers=auth).json()
+            self.assertEqual(november["actual"]["balance"], 200000)
+            self.assertEqual(november["planned"]["income"], 0)
+            self.assertEqual(december["planned"]["income"], 230000)
+            deleted = client.delete(url, headers=auth, params={"version": saved.json()["version"]})
+            self.assertEqual(deleted.status_code, 204)
+            self.assertEqual(client.get("/overview?month=2026-12", headers=auth).json()["planned"]["income"], 0)
+        self.assertEqual(len(self.bills()), 1)
+
+    def test_edit_and_delete_generated_legacy_series_keeps_payment_history(self):
+        from app.services.financial_plan_editor import PlanEdit, delete_item, serialize_plan, update_item
+
+        self.chat("Curso: R$ 150 previsto mensal a partir de 25/11/2026 durante 3 meses")
+        self.chat("sim")
+        plan = self.plans()[0]
+        plan.data = {key: value for key, value in plan.data.items() if key != "generated_bill_ids"}
+        bill = next(bill for bill in self.bills() if bill.due_date.month == 11)
+        bill.status = BillStatus.PAID
+        self.db.commit()
+
+        current = serialize_plan(plan)
+        current.pop("id")
+        current.pop("shared")
+        current.update(amount_cents=17500, months=2)
+        saved = update_item(self.db, self.uid, plan.id, PlanEdit(**current), date(2026, 11, 25))
+        paid, upcoming = sorted(self.bills(), key=lambda bill: bill.due_date)
+        self.assertEqual(paid.amount, 150)
+        self.assertEqual(upcoming.amount, 175)
+        self.assertEqual(upcoming.due_date.month, 12)
+        delete_item(self.db, self.uid, plan.id, saved["version"])
+        self.assertEqual(len(self.bills()), 1)
+        self.assertEqual(self.bills()[0].status, BillStatus.PAID)
+
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")
         self.chat("sim")

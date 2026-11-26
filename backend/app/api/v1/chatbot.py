@@ -4,7 +4,7 @@ import re
 from typing import Optional, List, Dict
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,8 @@ from app.api.dependencies import get_current_user
 from app.db.database import get_db
 from app.db.models import User
 from app.services.financial_chat_service import clear_history, handle_financial_chat, monthly_financial_overview, read_history, user_today
+
+from app.services.financial_plan_editor import PlanEdit, delete_item, list_items, update_item
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -61,3 +63,19 @@ def history(current_user: User = Depends(get_current_user), db: Session = Depend
 @router.delete("/history", status_code=204)
 def delete_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     clear_history(db, current_user.id)
+
+
+@router.get("/plan-items")
+def financial_plan_items(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return list_items(db, current_user.id)
+
+
+@router.put("/plan-items/{item_id}")
+def update_plan_item(item_id: UUID, edit: PlanEdit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return update_item(db, current_user.id, item_id, edit, user_today(current_user))
+
+
+@router.delete("/plan-items/{item_id}", status_code=204)
+def delete_plan_item(item_id: UUID, version: str = Query(pattern=r"^[a-f0-9]{64}$"),
+                     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    delete_item(db, current_user.id, item_id, version)
