@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'motion/react'
-import { Calendar, CreditCard, DollarSign, Home, LogOut, Menu, Target, TrendingUp, Upload, X } from 'lucide-react'
+import { Calendar, CreditCard, Users, DollarSign, Home, LogOut, Menu, Target, TrendingUp, Upload, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import ThemeToggle from './ThemeToggle'
 
@@ -24,6 +24,7 @@ export default function Layout() {
   const menuItems = [
     { to: '/app/dashboard', icon: Home, label: 'Painel' },
     { to: '/app/finances', icon: DollarSign, label: 'Finanças' },
+    { to: '/app/third-party', icon: Users, label: 'Terceiros' },
     { to: '/app/transactions/add', icon: Upload, label: 'Adicionar' },
     { to: '/app/payments', icon: Calendar, label: 'Pagamentos' },
     { to: '/app/installments', icon: CreditCard, label: 'Parcelados' },
@@ -53,7 +54,7 @@ export default function Layout() {
                 Economize<span className="text-cyan-600 dark:text-cyan-400">IA</span>
               </Link>
 
-              <div className="ml-5 hidden min-[900px]:flex min-[900px]:space-x-0.5 xl:ml-8 xl:space-x-1">
+              <div className="ml-5 hidden min-[1150px]:flex min-[1150px]:space-x-0.5 xl:ml-8 xl:space-x-1">
                 {menuItems.map((item) => {
                   const Icon = item.icon
                   return (
@@ -81,7 +82,7 @@ export default function Layout() {
               <ThemeToggle />
               <button
                 onClick={() => void handleLogout()}
-                className="hidden items-center rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 min-[900px]:flex dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
+                className="hidden items-center rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 min-[1150px]:flex dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
               >
                 <LogOut className="mr-2 h-4 w-4" />
                 Sair
@@ -89,7 +90,7 @@ export default function Layout() {
 
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 min-[900px]:hidden dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-950 min-[1150px]:hidden dark:text-slate-300 dark:hover:bg-slate-900 dark:hover:text-white"
                 aria-label="Menu"
               >
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -99,7 +100,7 @@ export default function Layout() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="border-t border-slate-200 bg-white shadow-lg min-[900px]:hidden md:absolute md:right-4 md:top-16 md:w-80 md:rounded-b-lg md:border md:border-t-0 dark:border-slate-800 dark:bg-slate-950">
+          <div className="border-t border-slate-200 bg-white shadow-lg min-[1150px]:hidden md:absolute md:right-4 md:top-16 md:w-80 md:rounded-b-lg md:border md:border-t-0 dark:border-slate-800 dark:bg-slate-950">
             <div className="grid grid-cols-1 gap-1 px-2 pb-3 pt-2">
               {menuItems.map((item) => {
                 const Icon = item.icon
