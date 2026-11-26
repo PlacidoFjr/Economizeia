@@ -118,3 +118,30 @@ def update_spending_link(bill_id: UUID, edit: SpendingLink,
         bill.expense_plan_id = None
     db.commit()
     return {"status": "updated"}
+
+
+# Third-party expenses use the same FinancialPlanItem records as the assistant.
+from app.services.third_party_expenses import (
+    ThirdPartyEntry, ThirdPartyLimit, ThirdPartyFunding, third_party_overview,
+    add_third_party_entry, set_card_limit, set_funding,
+)
+
+
+@router.get("/third-party")
+def third_party_dashboard(month: str | None = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return third_party_overview(db, current_user, month or user_today(current_user).strftime("%Y-%m"))
+
+
+@router.put("/third-party/limit")
+def third_party_limit(month: str, entry: ThirdPartyLimit, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return set_card_limit(db, current_user, month, entry)
+
+
+@router.post("/third-party/entries")
+def third_party_entry(entry: ThirdPartyEntry, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return add_third_party_entry(db, current_user, entry)
+
+
+@router.patch("/third-party/entries/{item_id}/funding")
+def third_party_funding(item_id: UUID, entry: ThirdPartyFunding, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return set_funding(db, current_user, item_id, entry)

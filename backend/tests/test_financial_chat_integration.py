@@ -299,6 +299,50 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")["actual"], 0)
 
 
+    def test_third_party_dashboard_reuses_plans_and_does_not_change_personal_balance(self):
+        from app.services.third_party_expenses import (
+            ThirdPartyEntry, ThirdPartyLimit, ThirdPartyFunding, third_party_overview,
+            add_third_party_entry, set_card_limit, set_funding,
+        )
+        self.chat("Academia: R$ 150 por mês previsto, paga pelo meu pai")
+        self.chat("sim")
+        month = "2026-11"
+        before = third_party_overview(self.db, self.user, month)
+        self.assertEqual(before["planned_cents"], 15000)
+        self.assertEqual(before["card_planned_cents"], 0)
+        self.assertIsNone(before["limit_cents"])
+        plan = before["planned"][0]
+        set_funding(self.db, self.user, uuid.UUID(plan["id"]), ThirdPartyFunding(version=plan["version"], father_card=True))
+        set_card_limit(self.db, self.user, month, ThirdPartyLimit(amount_cents=50000))
+        entry = ThirdPartyEntry(request_id=uuid.uuid4(), name="Compra exemplo", amount_cents=1234, day=date(2026, 11, 25))
+        with patch("app.services.third_party_expenses.user_today", return_value=date(2026, 11, 25)):
+            add_third_party_entry(self.db, self.user, entry)
+            result = add_third_party_entry(self.db, self.user, entry)
+        self.assertEqual(len(self.bills()), 0)
+        self.assertEqual(len(self.plans()), 2)
+        self.assertEqual(result["card_spent_cents"], 1234)
+        self.assertEqual(result["card_remaining_cents"], 48766)
+        self.assertEqual(result["card_planned_cents"], 15000)
+        self.assertEqual(result["actual_cents"], 1234)
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, month)["actual"]["balance"], 0)
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, month)["actual"]["third"], 1234)
+        self.assertEqual(third_party_overview(self.db, self.user, "2026-12")["card_planned_cents"], 15000)
+        self.assertEqual(third_party_overview(self.db, self.user, "2026-12")["actual_cents"], 0)
+        self.chat("Gastei R$ 20 no cartão do meu pai hoje")
+        self.assertEqual(self.chat("sim")["action"], "transactions_created")
+        self.assertEqual(third_party_overview(self.db, self.user, month)["card_spent_cents"], 3234)
+        self.assertEqual(len(self.bills()), 0)
+        other = User(id=uuid.uuid4(), name="Other", email=f"{uuid.uuid4()}@example.invalid",
+                     password_hash="test-only", email_verified=True, is_active=True, notif_prefs={})
+        self.db.add(other)
+        self.db.commit()
+        self.assertEqual(third_party_overview(self.db, other, month)["actual_cents"], 0)
+        self.assertIsNone(third_party_overview(self.db, other, month)["limit_cents"])
+        from fastapi import HTTPException
+        with self.assertRaises(HTTPException):
+            set_funding(self.db, other, uuid.UUID(plan["id"]), ThirdPartyFunding(version=plan["version"], father_card=False))
+        self.db.rollback()
+
     def test_production_varchar_enums_read_write_and_filter(self):
         from sqlalchemy import inspect, text
         from app.db.enum_compatibility import normalize_legacy_enum_labels
