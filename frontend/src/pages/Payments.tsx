@@ -1,7 +1,7 @@
 import FinancialPlanning from '../components/FinancialPlanning'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { endOfMonth, format, startOfMonth } from 'date-fns'
+import { endOfMonth, format, parseISO, startOfMonth } from 'date-fns'
 import api from '../services/api'
 import { Calendar, CheckCircle, Clock, WalletCards } from 'lucide-react'
 import { translateStatus, translatePaymentMethod } from '../utils/translations'
@@ -106,7 +106,7 @@ export default function Payments() {
                       Vencimento:{' '}
                       <strong className="font-semibold text-slate-900">
                         {payment.scheduled_date
-                          ? new Date(payment.scheduled_date).toLocaleDateString('pt-BR')
+                          ? parseISO(payment.scheduled_date).toLocaleDateString('pt-BR')
                           : 'N/A'}
                       </strong>
                     </span>
@@ -114,7 +114,7 @@ export default function Payments() {
                       <span>
                         Pago em:{' '}
                         <strong className="font-semibold text-slate-900">
-                          {new Date(payment.executed_date).toLocaleDateString('pt-BR')}
+                          {parseISO(payment.executed_date).toLocaleDateString('pt-BR')}
                         </strong>
                       </span>
                     )}
@@ -133,7 +133,7 @@ export default function Payments() {
                 </span>
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500">
                   <WalletCards className="h-3.5 w-3.5" />
-                  {translatePaymentMethod(payment.method)}
+                  {payment.method ? translatePaymentMethod(payment.method) : 'Forma não informada'}
                 </span>
               </div>
             </div>

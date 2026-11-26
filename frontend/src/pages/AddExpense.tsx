@@ -56,6 +56,7 @@ export default function AddExpense() {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['finances'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['financial-overview'] })
       showToast(
         `${formData.type === 'income' ? 'Receita' : 'Despesa'} criada com sucesso!`,
         'success'

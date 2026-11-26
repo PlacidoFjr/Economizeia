@@ -10,11 +10,14 @@ import EmptyState from '../components/EmptyState'
 import MonthSelector from '../components/MonthSelector'
 
 interface InstallmentGroup {
+  id: string
   issuer: string
   totalAmount: number
   monthAmount: number
   totalInstallments: number
   paidInstallments: number
+  paidAmount: number
+  remainingAmount: number
   remainingInstallments: number
   nextDueDate: string | null
   monthItems: any[]
@@ -56,15 +59,16 @@ export default function Installments() {
     const grouped: Record<string, any[]> = {}
 
     bills
-      .filter((bill: any) => bill.type === 'expense')
+      .filter((bill: any) => bill.type === 'expense' && bill.status !== 'cancelled')
       .forEach((bill: any) => {
-        const issuer = bill.issuer || 'Desconhecido'
-        if (!grouped[issuer]) grouped[issuer] = []
-        grouped[issuer].push(bill)
+        const groupId = bill.installment_group_id
+        if (!groupId) return
+        if (!grouped[groupId]) grouped[groupId] = []
+        grouped[groupId].push(bill)
       })
 
     return Object.entries(grouped)
-      .map(([issuer, issuerBills]) => {
+      .map(([id, issuerBills]) => {
         const allItems = [...issuerBills].sort((a: any, b: any) =>
           new Date(a.due_date || 0).getTime() - new Date(b.due_date || 0).getTime()
         )
@@ -73,21 +77,26 @@ export default function Installments() {
           return date ? isWithinInterval(date, monthInterval) : false
         })
         const pendingItems = allItems.filter((bill: any) => bill.status !== 'paid')
+        const paidItems = allItems.filter((bill: any) => bill.status === 'paid')
         const nextDueDate = pendingItems[0]?.due_date || null
+        const sumAmounts = (rows: any[]) => rows.reduce((sum, bill) => sum + Math.round((bill.amount || 0) * 100), 0) / 100
 
         return {
-          issuer,
-          totalAmount: allItems.reduce((sum, bill) => sum + (bill.amount || 0), 0),
-          monthAmount: monthItems.reduce((sum, bill) => sum + (bill.amount || 0), 0),
+          id,
+          issuer: allItems[0].issuer || 'Sem descrição',
+          totalAmount: sumAmounts(allItems),
+          monthAmount: sumAmounts(monthItems),
           totalInstallments: allItems.length,
-          paidInstallments: allItems.filter((bill: any) => bill.status === 'paid').length,
+          paidInstallments: paidItems.length,
+          paidAmount: sumAmounts(paidItems),
+          remainingAmount: sumAmounts(pendingItems),
           remainingInstallments: pendingItems.length,
           nextDueDate,
           monthItems,
           allItems,
         }
       })
-      .filter((group) => group.totalInstallments > 1 && group.monthItems.length > 0)
+      .filter((group) => group.monthItems.length > 0)
       .sort((a, b) => b.monthAmount - a.monthAmount)
   }, [bills, monthInterval])
 
@@ -141,7 +150,7 @@ export default function Installments() {
       {installmentGroups.length > 0 ? (
         <div className="space-y-4">
           {installmentGroups.map((group) => (
-            <div key={group.issuer} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+            <div key={group.id} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
@@ -150,10 +159,10 @@ export default function Installments() {
                       <span>Total: <strong className="text-slate-950">{formatCurrency(group.totalAmount)}</strong></span>
                       <span>Parcelas: <strong className="text-slate-950">{group.totalInstallments}x</strong></span>
                       <span>
-                        Pagas: <strong className="text-slate-950">{group.paidInstallments}</strong>
+                        Pagas: <strong className="text-slate-950">{group.paidInstallments} · {formatCurrency(group.paidAmount)}</strong>
                       </span>
                       <span className={group.remainingInstallments > 0 ? 'text-amber-700' : 'text-emerald-700'}>
-                        {group.remainingInstallments > 0 ? `${group.remainingInstallments} restantes` : 'Quitado'}
+                        {group.remainingInstallments > 0 ? `${group.remainingInstallments} restantes · ${formatCurrency(group.remainingAmount)}` : 'Quitado'}
                       </span>
                     </div>
                   </div>
@@ -188,7 +197,7 @@ export default function Installments() {
                           </p>
                           <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-600">
                             <CalendarDays className="h-3.5 w-3.5" />
-                            {bill.due_date ? new Date(bill.due_date).toLocaleDateString('pt-BR') : 'N/A'}
+                            {bill.due_date ? parseISO(bill.due_date).toLocaleDateString('pt-BR') : 'Sem data'}
                           </p>
                         </div>
                       </div>
@@ -214,7 +223,7 @@ export default function Installments() {
         <EmptyState
           icon={CreditCard}
           title="Nenhum parcelado neste mês"
-          description="Parcelados aparecem quando há mais de uma despesa do mesmo emissor e ao menos uma parcela vence no mês selecionado."
+          description="Parcelamentos com vencimento no mês aparecem aqui."
           action={{
             label: 'Adicionar despesa',
             onClick: () => { window.location.href = '/app/transactions/add' },

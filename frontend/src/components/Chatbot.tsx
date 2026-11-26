@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { MessageCircle, X, Send, Bot, User, Trash2, Sparkles, WalletCards } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
-import gsap from 'gsap'
-import { animate } from 'animejs'
 import api from '../services/api'
 import ConfirmDialog from './ConfirmDialog'
 import { useAuth } from '../contexts/AuthContext'
@@ -13,8 +11,6 @@ interface Message {
   text: string
   sender: 'user' | 'bot'
   timestamp: Date
-  action?: string
-  suggestions?: string[]
 }
 
 const createInitialMessages = (): Message[] => [
@@ -33,144 +29,68 @@ const QUICK_QUESTIONS = [
   'Recebi R$ 2500 de salário',
 ]
 
-const DETAIL_SUGGESTIONS = ['Mercado', 'Uber', 'Energia', 'Farmácia']
+type ChatResult = { response: string; action: string; draft_id?: string | null }
+type ChatTurn = { id: string; message: string; result: ChatResult; created_at: string }
+type ChatHistory = { turns: ChatTurn[]; draft: ChatResult | null }
+type ChatRequest = { message: string; request_id: string; draft_id?: string }
 
-const LEGACY_STORAGE_KEY = 'economizeia_chatbot_messages_v3'
-const LEGACY_STORAGE_PREFIX = 'economizeia_chatbot_messages_v4'
-const STORAGE_KEY_PREFIX = 'economizeia_chatbot_messages_v5'
-
-const getStorageKey = (user?: { id?: string; email?: string } | null) => {
-  const userKey = user?.id || user?.email
-  return userKey ? `${STORAGE_KEY_PREFIX}:${userKey}` : null
-}
-
-const clearLegacyChatStorage = () => {
-  localStorage.removeItem(LEGACY_STORAGE_KEY)
-  Object.keys(localStorage)
-    .filter((key) => key.startsWith(`${LEGACY_STORAGE_PREFIX}:`))
-    .forEach((key) => localStorage.removeItem(key))
-}
-
-// Função para carregar mensagens do localStorage
-const loadMessages = (storageKey: string | null): Message[] => {
-  if (!storageKey) return createInitialMessages()
-
-  try {
-    const saved = localStorage.getItem(storageKey)
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      if (!Array.isArray(parsed)) return createInitialMessages()
-
-      const hasLegacyContent = parsed.some((msg: any) =>
-        String(msg.text || '').includes('Como posso ajudá-lo hoje?') ||
-        String(msg.text || '').includes('Despesa criada com sucesso no valor de R$ 20.00')
-      )
-      if (hasLegacyContent) return createInitialMessages()
-
-      const cleanMessages = parsed.filter((msg: any) =>
-        msg &&
-        (msg.sender === 'user' || msg.sender === 'bot') &&
-        typeof msg.text === 'string' &&
-        msg.text.trim().length > 0
-      )
-
-      if (!cleanMessages.length) return createInitialMessages()
-
-      // Converter timestamps de string para Date
-      return cleanMessages.map((msg: any) => ({
-        ...msg,
-        timestamp: new Date(msg.timestamp)
-      }))
-    }
-  } catch (error) {
-    console.error('Erro ao carregar mensagens do localStorage:', error)
+function ChatMessageText({ text }: { text: string }) {
+  const sections = text.split('\n\n')
+  if (text.length <= 450 || sections.length < 2) {
+    return <p className="whitespace-pre-wrap break-words text-sm">{text}</p>
   }
-  return createInitialMessages()
-}
-
-// Função para salvar mensagens no localStorage
-const saveMessages = (storageKey: string | null, messages: Message[]) => {
-  if (!storageKey) return
-
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(messages))
-  } catch (error) {
-    console.error('Erro ao salvar mensagens no localStorage:', error)
-  }
+  return (
+    <div className="text-sm">
+      <p className="font-semibold">{sections[0]}</p>
+      <details className="mt-2">
+        <summary className="cursor-pointer font-medium underline underline-offset-4">Ver detalhes</summary>
+        <p className="mt-2 whitespace-pre-wrap break-words">{sections.slice(1).join('\n\n')}</p>
+      </details>
+    </div>
+  )
 }
 
 export default function Chatbot() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const storageKey = getStorageKey(user)
+  const historyKey = ['financial-chat-history', user?.id]
   const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<Message[]>(createInitialMessages)
   const [inputText, setInputText] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [sending, setSending] = useState<ChatRequest | null>(null)
+  const [failed, setFailed] = useState<{ message: string; retry?: ChatRequest } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
   const launcherRef = useRef<HTMLButtonElement>(null)
-  const skipNextSaveRef = useRef(false)
+  const inFlight = useRef(false)
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  const history = useQuery({
+    queryKey: historyKey,
+    queryFn: async () => (await api.get<ChatHistory>('/chatbot/history')).data,
+    enabled: isOpen && !!user,
+    retry: false,
+    gcTime: 0,
+  })
+  const draft = history.data?.draft
+  const turns = history.data?.turns ?? []
+  const messages: Message[] = [...createInitialMessages(), ...turns.flatMap(turn => [
+    { id: turn.id + '-user', text: turn.message, sender: 'user' as const, timestamp: new Date(turn.created_at) },
+    { id: turn.id + '-bot', text: turn.result.response, sender: 'bot' as const, timestamp: new Date(turn.created_at) },
+  ])]
+
+  useEffect(() => {
+    if (isOpen && !history.isPending) inputRef.current?.focus()
+  }, [isOpen, history.isPending])
+
+  const closeChat = () => {
+    setIsOpen(false)
+    requestAnimationFrame(() => launcherRef.current?.focus())
   }
 
   useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  useEffect(() => {
-    clearLegacyChatStorage()
-    skipNextSaveRef.current = true
-    setMessages(loadMessages(storageKey))
-  }, [storageKey])
-
-  // Salvar mensagens no localStorage sempre que mudarem
-  useEffect(() => {
-    if (skipNextSaveRef.current) {
-      skipNextSaveRef.current = false
-      return
-    }
-    saveMessages(storageKey, messages)
-  }, [messages, storageKey])
-
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [isOpen])
-
-  useEffect(() => {
-    if (!isOpen || !panelRef.current) return
-    const context = gsap.context(() => {
-      gsap.from('.chat-message-row', {
-        y: 10,
-        opacity: 0,
-        duration: 0.24,
-        ease: 'power2.out',
-        stagger: 0.025,
-      })
-    }, panelRef)
-
-    return () => context.revert()
-  }, [isOpen])
-
-  useEffect(() => {
-    if (isOpen || !launcherRef.current) return
-    const animation = animate(launcherRef.current, {
-      scale: [1, 1.06, 1],
-      duration: 1800,
-      loop: true,
-      ease: 'inOut(2)',
-    })
-
-    return () => {
-      animation.pause()
-    }
-  }, [isOpen])
+    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [isOpen, history.data, sending, failed])
 
   // Esconder barra de navegação do navegador mobile quando chatbot estiver aberto
   useEffect(() => {
@@ -195,147 +115,77 @@ export default function Chatbot() {
     }
   }, [isOpen])
 
-  const handleQuickQuestion = (question: string) => {
-    if (isLoading) return
-    handleSendMessage(question)
-  }
-
-  const getBotSuggestions = (action?: string, text?: string) => {
-    if (action === 'confirm_transactions') return ['Confirmar lançamentos', 'Cancelar']
-    if (action === 'transactions_created') return ['Meu planejamento mensal', 'Como está meu saldo?', 'Gastos por categoria']
-    const normalizedText = (text || '').toLowerCase()
-    if (action === 'ask_for_info' && (normalizedText.includes('com o que') || normalizedText.includes('onde foi'))) {
-      return DETAIL_SUGGESTIONS
-    }
-    if (action === 'ask_for_info' && normalizedText.includes('de onde veio')) {
-      return ['Salário', 'Freelance', 'Vendas', 'Reembolso']
-    }
-    if (action === 'expense_created' || action === 'income_created') {
-      return ['Como está meu saldo?', 'Gastos por categoria', 'Quanto tenho pendente?']
-    }
-    return []
-  }
-
-  const handleSendMessage = async (text?: string) => {
-    const messageText = text || inputText.trim()
-    if (!messageText || isLoading) return
-
-    // Adiciona mensagem do usuário
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      text: messageText,
-      sender: 'user',
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, userMessage])
-    setInputText('')
+  const submit = async (request: ChatRequest) => {
+    if (inFlight.current) return
+    inFlight.current = true
     setIsLoading(true)
-
+    setSending(request)
+    setFailed(null)
     try {
-      // Preparar histórico da conversa (últimas 10 mensagens)
-      const conversationHistory = messages
-        .slice(-10)
-        .map(msg => ({
-          sender: msg.sender,
-          text: msg.text
-        }))
-
-      // Chamar API do backend
-      const response = await api.post('/chatbot/chat', {
-        message: messageText,
-        conversation_history: conversationHistory
-      })
-      
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: response.data.response,
-        sender: 'bot',
-        timestamp: new Date(),
-        action: response.data.action,
-        suggestions: getBotSuggestions(response.data.action, response.data.response),
-      }
-      
-      setMessages((prev) => [...prev, botMessage])
-      setIsLoading(false)
-
-      // Se uma transação foi criada (despesa ou receita), invalidar queries para atualizar o dashboard
-      if (['expense_created', 'income_created', 'transactions_created'].includes(response.data.action)) {
-        try {
-          // Invalidar todas as queries relacionadas
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ['bills'] }),
-            queryClient.invalidateQueries({ queryKey: ['finances'] }),
-            queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
-            queryClient.invalidateQueries({ queryKey: ['financial-overview'] }),
-            queryClient.invalidateQueries({ queryKey: ['savings-goals'] }),
-            queryClient.invalidateQueries({ queryKey: ['payments'] }),
-          ])
-          
-          // Forçar refetch imediato das queries críticas
-          await Promise.all([
-            queryClient.refetchQueries({ queryKey: ['bills'], exact: false }),
-            queryClient.refetchQueries({ queryKey: ['finances'], exact: false }),
-          ])
-          
-        } catch (error) {
-          console.error('Erro ao atualizar queries:', error)
-        }
-      }
-    } catch (error: any) {
-      console.error('Erro ao chamar chatbot:', error)
-      
-      // Mensagem de erro mais amigável
-      let errorText = 'Desculpe, ocorreu um erro ao processar sua mensagem.'
-      
-      if (error.response?.status === 429) {
-        // Limite de uso atingido
-        errorText = error.response.data.detail || 'Limite de mensagens do chatbot atingido este mês. O limite será resetado no próximo mês.'
-      } else if (error.response?.status === 500) {
-        errorText = 'O assistente não está disponível no momento. Tente novamente em alguns instantes.'
-      } else if (error.response?.data?.detail) {
-        errorText = error.response.data.detail
-      } else if (error.message?.includes('timeout') || error.message?.includes('Network')) {
-        errorText = 'A conexão com o assistente está demorando muito. Por favor, tente novamente.'
+      const { data } = await api.post<ChatResult>('/chatbot/chat', request)
+      queryClient.setQueryData<ChatHistory>(historyKey, (previous) => ({
+        turns: [...(previous?.turns ?? []).filter(turn => turn.id !== request.request_id),
+          { id: request.request_id, message: request.message, result: data, created_at: new Date().toISOString() }].slice(-50),
+        draft: data.draft_id ? data : previous?.draft ?? null,
+      }))
+      const updates = [history.refetch()]
+      if (['transactions_created', 'expense_created', 'income_created'].includes(data.action)) {
+        await Promise.all([
+          ...updates,
+          ...['bills', 'finances', 'financial-overview', 'savings-goals', 'payments', 'installment-bills']
+            .map(key => queryClient.invalidateQueries({ queryKey: [key] })),
+        ])
       } else {
-        errorText = 'Desculpe, ocorreu um erro. Por favor, tente novamente ou use as funcionalidades do menu.'
+        await Promise.all(updates)
       }
-      
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: errorText,
-        sender: 'bot',
-        timestamp: new Date(),
+    } catch (error: unknown) {
+      const response = (error as { response?: { status?: number; data?: { detail?: unknown } } }).response
+      const detail = response?.data?.detail
+      const retry = !response?.status || response.status >= 500
+      setFailed({
+        message: typeof detail === 'string' ? detail : 'Não foi possível confirmar a resposta do assistente.',
+        retry: retry ? request : undefined,
+      })
+      if (!retry) {
+        await history.refetch()
+        if (response?.status !== 409) setInputText(request.message)
       }
-      setMessages((prev) => [...prev, errorMessage])
+    } finally {
+      setSending(null)
       setIsLoading(false)
+      inFlight.current = false
     }
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleSendMessage = (text?: string, draftId?: string) => {
+    const message = (text ?? inputText).trim()
+    if (!message || inFlight.current || history.isPending || history.isError) return
+    setInputText('')
+    void submit({ message, request_id: crypto.randomUUID(), draft_id: draftId ?? draft?.draft_id ?? 'none' })
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       handleSendMessage()
     }
   }
 
   const clearConversation = async () => {
-    if (isLoading) return
+    if (inFlight.current) return
+    inFlight.current = true
     setIsLoading(true)
     try {
-      await api.post('/chatbot/chat', { message: 'limpar rascunho' })
+      await api.delete('/chatbot/history')
+      queryClient.setQueryData<ChatHistory>(historyKey, { turns: [], draft: null })
+      setFailed(null)
     } catch {
-      setClearDialogOpen(false)
-      setMessages(prev => [...prev, { id: String(Date.now()), text: 'Não foi possível cancelar o rascunho no servidor. Tente novamente.', sender: 'bot', timestamp: new Date() }])
-      return
+      setFailed({ message: 'Não foi possível limpar a conversa. Tente novamente.' })
     } finally {
       setIsLoading(false)
+      inFlight.current = false
+      setClearDialogOpen(false)
     }
-    if (storageKey) {
-      localStorage.removeItem(storageKey)
-    }
-    localStorage.removeItem(LEGACY_STORAGE_KEY)
-    setMessages(createInitialMessages())
-    setClearDialogOpen(false)
   }
 
   return (
@@ -343,7 +193,7 @@ export default function Chatbot() {
       <ConfirmDialog
         open={clearDialogOpen}
         title="Limpar conversa?"
-        description="O histórico deste navegador e o rascunho pendente serão descartados. Seus lançamentos e planos já confirmados serão mantidos."
+        description="O histórico da conversa e o rascunho pendente serão removidos da sua conta."
         confirmLabel="Limpar"
         tone="danger"
         onCancel={() => setClearDialogOpen(false)}
@@ -365,12 +215,16 @@ export default function Chatbot() {
       <AnimatePresence>
       {isOpen && (
         <motion.div
-          ref={panelRef}
           initial={{ opacity: 0, y: 22, scale: 0.97 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 18, scale: 0.98 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
-          className="chatbot-container safe-area-inset fixed inset-0 z-50 flex flex-col border-0 border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-auto sm:bottom-6 sm:right-6 sm:h-[min(760px,90vh)] sm:w-[520px] sm:rounded-lg sm:border"
+          className="chatbot-container safe-area-inset fixed inset-0 z-[110] flex flex-col border-0 border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-auto sm:bottom-6 sm:right-6 sm:z-[70] sm:h-[min(760px,90vh)] sm:w-[520px] sm:rounded-lg sm:border"
+          role="dialog"
+          aria-labelledby="financial-chat-title"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !clearDialogOpen) closeChat()
+          }}
         >
           {/* Header */}
           <div className="relative flex items-center justify-between bg-slate-950 p-3 text-white safe-area-top sm:p-4">
@@ -379,7 +233,7 @@ export default function Chatbot() {
                 <Bot className="h-4 w-4 text-cyan-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <h3 className="font-semibold text-xs sm:text-sm truncate">Assistente EconomizeIA</h3>
+                <h3 id="financial-chat-title" className="font-semibold text-xs sm:text-sm truncate">Assistente EconomizeIA</h3>
                 <p className="flex items-center gap-1 text-xs text-slate-400 whitespace-nowrap">
                   <Sparkles className="h-3 w-3 text-cyan-300" />
                   Organiza antes de salvar
@@ -396,7 +250,7 @@ export default function Chatbot() {
                 <Trash2 className="w-5 h-5 sm:w-4 sm:h-4 text-white" />
               </button>
               <button
-                onClick={() => setIsOpen(false)}
+                onClick={closeChat}
                 className="hover:bg-gray-800 active:bg-gray-700 p-2 sm:p-1.5 rounded transition-colors touch-manipulation min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center"
                 aria-label="Fechar chatbot"
               >
@@ -406,7 +260,7 @@ export default function Chatbot() {
           </div>
 
           {/* Mensagens */}
-          <div className="flex-1 overflow-y-auto bg-slate-50 p-3 sm:p-4 space-y-3 sm:space-y-4 overscroll-contain dark:bg-slate-950">
+          <div className="flex-1 overflow-y-auto bg-slate-50 p-3 sm:p-4 space-y-3 sm:space-y-4 overscroll-contain dark:bg-slate-950" role="log" aria-live="polite">
             {messages.filter((message) => message.text.trim().length > 0).map((message) => (
               <div
                 key={message.id}
@@ -437,32 +291,33 @@ export default function Chatbot() {
                         : 'border border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100'
                     }`}
                   >
-                    <p className="text-xs sm:text-sm whitespace-pre-wrap break-words">{message.text}</p>
+                    <ChatMessageText text={message.text} />
                     <p className="text-[10px] sm:text-xs mt-1 opacity-70">
                       {message.timestamp.toLocaleTimeString('pt-BR', {
                         hour: '2-digit',
                         minute: '2-digit',
                       })}
                     </p>
-                    {message.sender === 'bot' && message.id === messages[messages.length - 1]?.id && !!message.suggestions?.length && (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {message.suggestions.map((suggestion) => (
-                          <button
-                            key={suggestion}
-                            type="button"
-                            disabled={isLoading}
-                            onClick={() => handleQuickQuestion(suggestion)}
-                            className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-slate-600 dark:hover:bg-slate-900"
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+
                   </div>
                 </div>
               </div>
             ))}
+
+            {history.isPending && <p className="text-sm text-slate-600">Carregando conversa...</p>}
+            {history.isError && (
+              <div className="text-sm" role="alert">
+                <p>Não foi possível carregar a conversa.</p>
+                <button className="mt-1 font-semibold underline" onClick={() => history.refetch()}>Tentar novamente</button>
+              </div>
+            )}
+            {sending && <p className="ml-auto w-fit max-w-[80%] whitespace-pre-wrap break-words rounded-lg bg-slate-900 px-3 py-2 text-sm text-white">{sending.message}</p>}
+            {failed && (
+              <div className="text-sm" role="alert">
+                <p>{failed.message}</p>
+                {failed.retry && <button className="mt-1 font-semibold underline" onClick={() => failed.retry && submit(failed.retry)}>Tentar a mesma mensagem</button>}
+              </div>
+            )}
 
             {isLoading && (
               <div className="flex justify-start">
@@ -485,8 +340,21 @@ export default function Chatbot() {
             <div ref={messagesEndRef} />
           </div>
 
+          {draft?.draft_id && (
+            <section aria-label="Rascunho pendente" className="border-t border-teal-200 bg-teal-50 px-3 py-3 text-sm text-teal-950 dark:border-teal-800 dark:bg-teal-950 dark:text-teal-50 sm:px-4">
+              <details open={draft.action !== 'confirm_transactions' || undefined}>
+                <summary className="cursor-pointer font-semibold">{draft.action === 'confirm_transactions' ? 'Revisar rascunho pendente' : 'Completar rascunho'}</summary>
+                <p className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap break-words">{draft.response}</p>
+              </details>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {draft.action === 'confirm_transactions' && <button disabled={isLoading} className="rounded-md bg-teal-800 px-3 py-2 font-semibold text-white disabled:opacity-50" onClick={() => handleSendMessage('Confirmar lançamentos', draft.draft_id ?? undefined)}>Confirmar</button>}
+                <button disabled={isLoading} className="rounded-md border border-teal-600 px-3 py-2 font-semibold disabled:opacity-50" onClick={() => handleSendMessage('Cancelar', draft.draft_id ?? undefined)}>Cancelar</button>
+              </div>
+            </section>
+          )}
+
           {/* Perguntas rápidas */}
-          {messages.length === 1 && (
+          {!!history.data && messages.length === 1 && !draft && (
             <div className="border-t border-slate-200 bg-white px-3 py-3 dark:border-slate-800 dark:bg-slate-950 sm:px-4">
               <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
                 <WalletCards className="h-3.5 w-3.5" />
@@ -496,7 +364,7 @@ export default function Chatbot() {
                 {QUICK_QUESTIONS.map((question, index) => (
                   <button
                     key={index}
-                    onClick={() => handleQuickQuestion(question)}
+                    onClick={() => handleSendMessage(question)}
                     className="touch-manipulation rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-200 active:bg-slate-300 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     {question}
@@ -519,7 +387,8 @@ export default function Chatbot() {
                 onKeyDown={handleKeyPress}
                 placeholder="Digite ou cole uma lista de gastos..."
                 className="touch-manipulation min-h-[44px] max-h-48 resize-y flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500"
-                disabled={isLoading}
+                disabled={isLoading || history.isPending || history.isError}
+                aria-label="Mensagem ao assistente"
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="off"
@@ -527,7 +396,7 @@ export default function Chatbot() {
               />
               <button
                 onClick={() => handleSendMessage()}
-                disabled={!inputText.trim() || isLoading}
+                disabled={!inputText.trim() || isLoading || history.isPending || history.isError}
                 className="flex min-w-[44px] items-center justify-center rounded-lg bg-slate-950 px-3 py-2 text-white transition-colors hover:bg-slate-800 active:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 touch-manipulation sm:px-4"
                 aria-label="Enviar mensagem"
               >

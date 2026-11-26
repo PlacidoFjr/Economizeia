@@ -10,11 +10,11 @@ interface SavingsGoal {
   name: string
   target_amount: number
   current_amount: number
-  deadline: string
+  deadline: string | null
   description?: string
   status: string
   progress_percentage: number
-  days_remaining: number
+  days_remaining: number | null
   notify_days_before: number[]
 }
 
@@ -94,7 +94,7 @@ export default function SavingsGoals() {
         data: {
           name: formData.name,
           target_amount: parseFloat(formData.target_amount),
-          deadline: formData.deadline,
+          deadline: formData.deadline || null,
           description: formData.description,
         },
       })
@@ -102,7 +102,7 @@ export default function SavingsGoals() {
       createMutation.mutate({
         name: formData.name,
         target_amount: parseFloat(formData.target_amount),
-        deadline: formData.deadline,
+        deadline: formData.deadline || null,
         description: formData.description,
         notify_days_before: [30, 15, 7, 3, 1],
       })
@@ -130,16 +130,16 @@ export default function SavingsGoals() {
     setFormData({
       name: goal.name,
       target_amount: goal.target_amount.toString(),
-      deadline: goal.deadline,
+      deadline: goal.deadline ?? '',
       description: goal.description || '',
     })
     setShowForm(true)
   }
 
-  const getStatusColor = (status: string, daysRemaining: number) => {
+  const getStatusColor = (status: string, daysRemaining: number | null) => {
     if (status === 'completed') return 'bg-green-100 text-green-800'
     if (status === 'expired') return 'bg-red-100 text-red-800'
-    if (daysRemaining <= 7) return 'bg-yellow-100 text-yellow-800'
+    if (daysRemaining !== null && daysRemaining <= 7) return 'bg-yellow-100 text-yellow-800'
     return 'bg-blue-100 text-blue-800'
   }
 
@@ -234,11 +234,10 @@ export default function SavingsGoals() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Data Limite
+                  Data limite (opcional)
                 </label>
                 <input
                   type="date"
-                  required
                   value={formData.deadline}
                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent"
@@ -334,7 +333,7 @@ export default function SavingsGoals() {
                     className={`h-3 rounded-full transition-all ${
                       goal.progress_percentage >= 100
                         ? 'bg-green-500'
-                        : goal.days_remaining <= 7
+                        : goal.days_remaining !== null && goal.days_remaining <= 7
                         ? 'bg-yellow-500'
                         : 'bg-blue-500'
                     }`}
@@ -368,10 +367,10 @@ export default function SavingsGoals() {
                     Prazo
                   </span>
                   <span className="text-sm font-semibold text-gray-900">
-                    {new Date(goal.deadline).toLocaleDateString('pt-BR')}
+                    {goal.deadline ? goal.deadline.split('-').reverse().join('/') : 'Sem prazo'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center">
+                {goal.days_remaining !== null && <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 flex items-center gap-1">
                     <TrendingUp className="w-4 h-4" />
                     Restam
@@ -383,7 +382,7 @@ export default function SavingsGoals() {
                   >
                     {goal.days_remaining} {goal.days_remaining === 1 ? 'dia' : 'dias'}
                   </span>
-                </div>
+                </div>}
               </div>
 
               <div className="mb-4">

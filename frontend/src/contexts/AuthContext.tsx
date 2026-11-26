@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import api from '../services/api'
 
 interface User {
@@ -27,6 +28,7 @@ function clearAuthTokens() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<User | null>(null)
   const [isAuthLoading, setIsAuthLoading] = useState(true)
 
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     clearAuthTokens()
+    queryClient.clear()
     setUser(null)
   }
 

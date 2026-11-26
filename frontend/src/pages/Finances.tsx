@@ -59,6 +59,8 @@ export default function Finances() {
       queryClient.invalidateQueries({ queryKey: ['finances'] })
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['financial-overview'] })
+      queryClient.invalidateQueries({ queryKey: ['installment-bills'] })
     },
   })
 
