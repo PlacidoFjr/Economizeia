@@ -104,7 +104,13 @@ export default function ThirdPartyExpenses() {
     setError(''); saveEntry.mutate(cents)
   }
   const data = query.data
-  const percent = data?.limit_cents ? data.card_spent_cents / data.limit_cents * 100 : null
+  // A forecast reserves part of the user's spending cap, but is not a realized purchase.
+  const committed = data ? data.card_spent_cents + data.card_planned_cents : 0
+  const limit = data?.limit_cents ?? null
+  const remaining = limit === null ? null : limit - committed
+  const percent = limit !== null && limit > 0 ? committed / limit * 100 : null
+  const actualWidth = limit !== null && limit > 0 && data ? Math.min(100, data.card_spent_cents / limit * 100) : 0
+  const plannedWidth = limit !== null && limit > 0 && data ? Math.min(100 - actualWidth, data.card_planned_cents / limit * 100) : 0
   function renderRows(entries: Entry[], planned: boolean) {
     if (!entries.length) return <p className="py-5 text-center text-sm text-slate-500">Nenhuma despesa {planned ? 'prevista' : 'realizada'} neste mês.</p>
     return <div className="divide-y divide-slate-200 dark:divide-slate-800">{entries.map(entry => <div key={entry.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -135,10 +141,22 @@ export default function ThirdPartyExpenses() {
       <section className="grid gap-3 sm:grid-cols-3">
         <div className={card + ' sm:col-span-3'}><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><CreditCard className="h-5 w-5" /><h2 className="font-bold">Cartão do pai</h2></div><button className={secondary} disabled={busy} onClick={() => setLimitInput(data.limit_cents == null ? '' : moneyInput(data.limit_cents))}>{data.limit_cents == null ? 'Definir limite' : 'Editar limite'}</button></div>
           {limitInput !== null && <form className="mt-3 flex flex-wrap items-end gap-2" onSubmit={e => { e.preventDefault(); const cents = parseCents(limitInput); if (cents === null) { setError('Informe um limite válido.'); return } saveLimit.mutate(cents) }}><label className="text-sm">Limite para este mês (R$)<input className={input} inputMode="decimal" required value={limitInput} onChange={e => setLimitInput(e.target.value)} /></label><button className={primary} disabled={busy}>Salvar limite</button><button className={secondary} type="button" disabled={busy} onClick={() => setLimitInput(null)}>Cancelar</button>{data.limit_cents !== null && <button className={secondary} type="button" disabled={busy} onClick={() => saveLimit.mutate(null)}>Remover limite</button>}</form>}
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Compras registradas', money(data.card_spent_cents)], ['Limite de controle', data.limit_cents == null ? 'Não definido' : money(data.limit_cents)], ['Restante do limite', data.card_remaining_cents == null ? '—' : money(data.card_remaining_cents)], ['Despesas previstas vinculadas', money(data.card_planned_cents)]].map(([label, value]) => <div key={label}><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-lg font-bold tabular-nums sm:text-xl">{value}</p></div>)}</div>
-          {percent !== null && <div className="mt-4"><div className="h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"><div style={{ width: Math.min(percent, 100) + '%' }} className={'h-full rounded-full ' + (percent >= 100 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-500' : 'bg-teal-500')} /></div><p className="mt-2 text-xs text-slate-500">{percent.toFixed(1).replace('.', ',')}% do limite utilizado{percent >= 100 ? ' · Limite atingido ou ultrapassado' : percent >= 80 ? ' · Atenção ao limite' : ''}</p></div>}
-          {data.card_remaining_cents !== null && data.card_remaining_cents < 0 && <p className="mt-2 text-sm font-semibold text-red-600">Limite ultrapassado em {money(-data.card_remaining_cents)}.</p>}
-          <p className="mt-3 text-xs text-slate-500">Limite manual por mês civil, com base nas compras registradas. Previsões ficam separadas para evitar duplicidade.</p>
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Compras registradas', money(data.card_spent_cents)], ['Limite de controle', data.limit_cents == null ? 'Não definido' : money(data.limit_cents)], ['Disponível após previsões', remaining === null ? '—' : money(remaining)], ['Despesas previstas vinculadas', money(data.card_planned_cents)]].map(([label, value]) => <div key={label}><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-lg font-bold tabular-nums sm:text-xl">{value}</p></div>)}</div>
+          {percent !== null && <div className="mt-4">
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800" role="img" aria-label={percent.toFixed(2).replace('.', ',') + '% do limite comprometido'}>
+              <div style={{ width: actualWidth + '%' }} className="h-full shrink-0 bg-teal-500" />
+              <div style={{ width: plannedWidth + '%' }} className="h-full shrink-0 bg-amber-500" />
+            </div>
+            <p className="mt-2 text-xs text-slate-500">{percent.toFixed(2).replace('.', ',')}% do limite comprometido · {money(committed)}{percent >= 100 ? ' · Limite atingido ou ultrapassado' : percent >= 80 ? ' · Atenção ao limite' : ''}</p>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-teal-500" />Realizado</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-500" />Previsto</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-slate-200 dark:bg-slate-800" />Disponível</span>
+            </div>
+          </div>}
+          {limit === 0 && <p className="mt-2 text-xs text-slate-500">Limite de controle definido em zero.</p>}
+          {remaining !== null && remaining < 0 && <p className="mt-2 text-sm font-semibold text-red-600">Comprometimento acima do limite em {money(-remaining)}.</p>}
+          <p className="mt-3 text-xs text-slate-500">Limite manual por mês civil. Compras realizadas e previsões vinculadas comprometem o limite. Confira se uma previsão já foi registrada como compra para não contabilizar a mesma despesa duas vezes.</p>
         </div>
         <div className={card}><Wallet className="mb-2 h-5 w-5 text-slate-500" /><p className="text-xs text-slate-500">Terceiros · despesas realizadas</p><p className="text-xl font-bold">{money(data.actual_cents)}</p></div>
         <div className={card}><TrendingUp className="mb-2 h-5 w-5 text-slate-500" /><p className="text-xs text-slate-500">Terceiros · despesas previstas</p><p className="text-xl font-bold">{money(data.planned_cents)}</p></div>
