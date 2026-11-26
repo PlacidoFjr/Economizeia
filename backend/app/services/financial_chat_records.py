@@ -112,6 +112,7 @@ def matching_plan_rows(db, uid, item, plan_model):
         row for row in rows
         if row.data["payer"] == "self" and row.data["frequency"] != "actual"
         and not row.data.get("materialized") and row.data["kind"] == item["kind"]
+        and (item["kind"] == "income" or row.data.get("day") and row.data["frequency"] == "once")
         and matching_name(row.data["name"], item["kind"]) == matching_name(item["name"], item["kind"])
         and row.data["amount_cents"] == (item.get("personal_cents") or item["amount_cents"])
         and occurrence_count(row.data, item["month"]) > len(row.data.get("settled", {}).get(item["month"], []))
@@ -177,6 +178,7 @@ def apply_item(db, uid, item, plan_model):
             bill_type=bill_type, status=BillStatus.PAID if is_actual else BillStatus.PENDING,
             category=item["category"], installment_group_id=group_id,
         )
+        bill.expense_plan_id = item.get("expense_plan_id")
         output.append(str(bill.id))
     if item.get("linked_plan"):
         plan = db.query(plan_model).filter_by(user_id=uid, id=UUID(item["linked_plan"])).with_for_update().first()

@@ -10,6 +10,7 @@ from app.services.financial_chat_parser import (
     month_add, norm, occurrence_count, plan_totals,
 )
 from app.services.financial_chat_records import money_cents, scoped_bills
+from app.services.financial_spending import spending_overview
 
 
 def financial_data(db, uid, plan_model):
@@ -89,12 +90,18 @@ def overview_from_data(data, month, today, history=False):
         items.append(dict(item, id=str(row.id), occurrence_count=remaining_count))
     forecast["income"] += total(open_in_month(bills, month, BillType.INCOME))
     forecast["expense"] += total(pending)
+    spending = spending_overview(plans, expenses, month)
+    reference_total = sum(group["planned"] or 0 for group in spending)
+    referenced_categories = {group["category"] for group in spending if group["planned"] is not None}
+    uncovered_pending = total(bill for bill in pending if bill.category not in referenced_categories)
+    planned_spending = reference_total + uncovered_pending
     result = {
         "month": month,
+        "spending": spending,
         "actual": {"income": income, "expense": expense, "third": forecast["third_actual"],
                    "balance": income - expense, "pending": total(pending)},
-        "planned": {**forecast, "available": forecast["income"] - forecast["expense"] - forecast["budget"] - forecast["reserve"],
-                    "cost_of_living": forecast["expense"] + forecast["third"]},
+        "planned": {**forecast, "available": forecast["income"] - planned_spending - forecast["reserve"],
+                    "cost_of_living": planned_spending + forecast["third"]},
         "items": items,
     }
     if history:

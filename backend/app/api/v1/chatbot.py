@@ -79,3 +79,32 @@ def update_plan_item(item_id: UUID, edit: PlanEdit, current_user: User = Depends
 def delete_plan_item(item_id: UUID, version: str = Query(pattern=r"^[a-f0-9]{64}$"),
                      current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     delete_item(db, current_user.id, item_id, version)
+
+class SpendingLink(BaseModel):
+    category: str = Field(min_length=1, max_length=50)
+    plan_id: UUID | None = None
+
+
+@router.put("/spending/{bill_id}")
+def update_spending_link(bill_id: UUID, edit: SpendingLink,
+                         current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.db.models import Bill, BillType
+    from app.services.financial_chat_service import FinancialPlanItem, lock_user
+    lock_user(db, current_user.id)
+    bill = db.query(Bill).filter_by(id=bill_id, user_id=current_user.id).with_for_update().first()
+    if bill is None or bill.type != BillType.EXPENSE:
+        raise HTTPException(404, "Despesa não encontrada.")
+    if edit.plan_id:
+        row = db.query(FinancialPlanItem).filter_by(id=edit.plan_id, user_id=current_user.id).first()
+        if row is None or row.data["kind"] not in ("expense", "budget") or row.data["payer"] not in ("self", "shared"):
+            raise HTTPException(422, "Escolha uma referência de gastos própria.")
+        from app.services.financial_chat_parser import occurrence_count
+        if not bill.due_date or not occurrence_count(row.data, bill.due_date.strftime("%Y-%m")):
+            raise HTTPException(422, "A referência precisa estar vigente no mês do gasto.")
+        bill.category = row.data["category"]
+        bill.expense_plan_id = str(edit.plan_id)
+    else:
+        bill.category = edit.category
+        bill.expense_plan_id = None
+    db.commit()
+    return {"status": "updated"}

@@ -43,7 +43,7 @@ def classify(message):
         return Intent.COMPARE
     if QUESTION.search(n) or ("?" in message and "\n" not in message):
         return Intent.CONSULT
-    if re.match(r"^(?:na verdade|corrija|corrige|corrigir|esse pagamento foi|foi ontem|foi hoje|registra isso|mude o item|troque o item)\b", n):
+    if re.match(r"^(?:vincule|vincular|na verdade|corrija|corrige|corrigir|esse pagamento foi|foi ontem|foi hoje|registra isso|mude o item|troque o item)\b", n):
         return Intent.CORRECT
     if re.match(r"^(?:exclu[ai]|excluir|apagu?e|apagar|remova|remover|delete)\s+", n):
         return Intent.DELETE

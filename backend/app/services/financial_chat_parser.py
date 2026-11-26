@@ -20,7 +20,7 @@ INSTALLMENTS = re.compile(r"\b(\d+)\s*(?:x|parcelas|vezes)\b")
 CATEGORIES = {
     "alimentacao": ("alimentacao", "proteina", "mercado", "lanche", "restaurante", "ifood", "padaria"),
     "moradia": ("moradia", "aluguel", "energia", "luz", "internet", "condominio", "agua"),
-    "transporte": ("transporte", "onibus", "metro", "uber", "moto", "gasolina"),
+    "transporte": ("transporte", "onibus", "metro", "uber", "moto", "gasolina", "passagem", "salvador card", "99"),
     "saude": ("academia", "saude", "farmacia", "medico"),
     "lazer": ("lazer", "cinema", "cinemark", "spotify", "youtube", "netflix"),
     "educacao": ("concurso", "curso", "faculdade", "escola"),
@@ -60,7 +60,7 @@ def category(name, kind):
     if kind == "income":
         return "renda"
     n = norm(name)
-    return next((cat for cat, words in CATEGORIES.items() if any(w in n for w in words)), "outras")
+    return next((cat for cat, words in CATEGORIES.items() if any(re.search(r"(?<!\w)" + re.escape(w) + r"(?!\w)", n) for w in words)), "outras")
 
 
 def get_month(text, today):
@@ -93,7 +93,7 @@ def get_day(text, today):
     iso = re.search(r"\b20\d{2}-\d{2}-\d{2}\b", n)
     if iso:
         return date.fromisoformat(iso.group())
-    match = re.search(r"\b(\d{1,2})/(\d{1,2})(?:/(20\d{2}))?\b", n)
+    match = re.search(r"(?<![\d-])(\d{1,2})[-/](\d{1,2})(?:[-/](20\d{2}))?\b", n)
     if match:
         return date(int(match.group(3) or today.year), int(match.group(2)), int(match.group(1)))
     match = LONG_DATE.search(n)
@@ -125,7 +125,8 @@ class Item:
 
 
 def money_matches(text):
-    text = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/20\d{2})?\b", "", text)
+    text = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|(?<![\d-])\d{1,2}[-/]\d{1,2}(?:[-/]20\d{2})?\b", "", text)
+    text = re.sub(r"\b(?:na|no|pela|pelo|de|da|do)\s+99\b", "", text)
     text = LONG_DATE.sub("", text)
     text = re.sub(r"\bdia\s+\d{1,2}\b", "", text)
     text = re.sub(r"\b\d+\s*(?:dias?|semanas?|mes(?:es)?|anos?|parcelas?|vezes|x)\b", "", text)
@@ -180,6 +181,9 @@ def interpret(message, today):
     section, owner, monthly, section_payer = "", "self", False, None
     section_planned = False
     account = None
+    footer = re.search(r"(?:^|\n)\s*(despesas|gastos|receitas)\s*$", norm(message))
+    if footer:
+        section = "income" if footer.group(1) == "receitas" else "expense"
     lines = re.split(r"\r?\n|;(?!\s*minha parte\b)", message, flags=re.I)
     for raw in lines:
         line = raw.strip().strip("*").strip()
@@ -349,15 +353,21 @@ def interpret(message, today):
         if ":" in line:
             name = line.split(":", 1)[0].strip()
         else:
-            name = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/20\d{2})?\b", "", line)
+            name = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|(?<![\d-])\d{1,2}[-/]\d{1,2}(?:[-/]20\d{2})?\b", "", line)
             name = re.sub(r"(?i)\b(?:vou|meu pai|minha mãe|meu irmão)\s+(?:receber|pagar|pagou|paga)\b", "", name)
             name = re.sub(r"(?i)\b(?:durante|por)\s+(?:" + COUNT + r")\s+mes(?:es)?\b|\b(?:em\s+)?\d+\s*(?:x|parcelas|vezes)\b", "", name)
+            name = re.sub(r"\b99\b", "APPNOVENOVE", name)
             name = MONEY.sub("", name)
+            name = name.replace("APPNOVENOVE", "99")
             name = re.sub(r"(?i)\b(?:por mês|todo mês|cada mês|primeiro vencimento|primeira parcela|que custa|meu trabalho)\b", lambda m: "Trabalho" if m.group().lower() == "meu trabalho" else "", name)
             name = re.sub(r"(?i)\b(gastei|gaste|paguei|comprei|recebi|receby|ganhei|vou|receber|bota|coloca|lança|adicionar|registrar|cadastrar|planejar|despesa|receita|reais|conto[s]?|hoje|ontem|amanhã|mensal|mensais)\b", " ", name)
             name = re.sub(r"(?i)^\s*(?:(?:de|do|da|no|na|em|para|com|minha|meu|uma|um)\s+)+", "", name)
             name = re.sub(r"(?i)(?:\s+(?:em|no|na|para|com|começando|até|dia|de))+\s*[.,]*\s*$", "", name)
             name = re.sub(r"\s+", " ", name).strip(" -/.,")
+        if norm(name).strip() == "passagem salvador card":
+            name = "Salvador Card"
+        elif norm(name).strip() == "uber moto":
+            name = "Uber Moto"
         if not name and kind == "income" and recurring:
             name = "Receita prevista"
         if not name or len(name) > 180 or norm(name) in {"gasto", "boleto", "conta", "valor"}:

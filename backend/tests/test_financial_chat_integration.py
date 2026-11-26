@@ -135,13 +135,13 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertIsNone(read_history(self.db, self.uid)["draft"])
         self.assertIn("R$ 140,00", self.chat("Quanto meu pai paga por mim?")["response"])
         self.assertIn("Diferença", self.chat("Quanto gastei em relação ao mês passado?")["response"])
-        self.assertIn("vinculado", self.chat("Gastei R$ 100 no Mercado ontem")["response"])
+        self.assertEqual(self.chat("Gastei R$ 100 no Mercado ontem")["action"], "confirm_transactions")
         self.chat("sim")
         overview = monthly_financial_overview(self.db, self.uid, "2026-11")
         self.assertEqual(overview["actual"]["expense"], 10000)
         self.assertEqual(overview["actual"]["third"], 14000)
         self.assertEqual(overview["actual"]["income"], 200000)
-        self.assertEqual(overview["planned"]["expense"], 0)
+        self.assertEqual(overview["planned"]["expense"], 10000)
         self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-12")["planned"]["expense"], 10000)
         self.assertIn("100,00", self.chat("Quanto gastei com alimentação?")["response"])
         self.assertIn("Nenhum gasto", self.chat("E em dezembro?")["response"])
@@ -238,6 +238,66 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         delete_item(self.db, self.uid, plan.id, saved["version"])
         self.assertEqual(len(self.bills()), 1)
         self.assertEqual(self.bills()[0].status, BillStatus.PAID)
+
+
+    def test_original_batch_and_transport_references(self):
+        from app.services.financial_chat_parser import interpret
+        message = "5.90 de passagem salvador card 25-11\n9,95 mercado 25-11\n6.10 uber moto 25-11\ndespesas"
+        parsed, issues = interpret(message, date(2026, 11, 26))
+        self.assertFalse(issues)
+        self.assertEqual([item.amount_cents for item in parsed], [590, 995, 610])
+        self.assertTrue(all(item.day == "2026-11-25" for item in parsed))
+        self.chat("Ônibus e metrô: R$ 100 previstos mensal\nUber/moto: R$ 60 previstos mensal")
+        self.chat("sim")
+        draft = self.chat(message)
+        self.assertEqual(draft["action"], "confirm_transactions")
+        result = self.chat("sim")
+        self.assertIn("R$ 21,95", result["response"])
+        overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+        transport = next(group for group in overview["spending"] if group["category"] == "transporte")
+        self.assertEqual((transport["planned"], transport["actual"], transport["remaining"], transport["percent"]), (16000,1200,14800,7.5))
+        self.assertEqual({row["name"]: row["actual"] for row in transport["items"]}, {"Ônibus e metrô": 590, "Uber/moto": 610})
+        self.chat("gastei 18,50 na 99 ontem")
+        self.chat("sim")
+        transport = next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")
+        self.assertEqual(transport["actual"], 3050)
+        self.assertEqual(next(row for row in transport["items"] if row["name"] == "Uber/moto")["actual"], 2460)
+        self.assertEqual(next(group for group in monthly_financial_overview(self.db, self.uid, "2026-12")["spending"] if group["category"] == "transporte")["actual"], 0)
+        self.chat("Gastei R$ 200 de Uber ontem")
+        self.chat("sim")
+        transport = next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")
+        self.assertEqual(transport["remaining"], -7050)
+        self.chat("Transporte: limite de R$ 150 por mês")
+        self.chat("sim")
+        transport = next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")
+        self.assertEqual(transport["planned"], 15000)
+
+
+
+    def test_ambiguous_reference_and_manual_correction(self):
+        from app.api.v1.chatbot import SpendingLink, update_spending_link
+        self.chat("Transporte trabalho: R$ 100 previstos por mês\nTransporte pessoal: R$ 60 previstos por mês")
+        self.chat("sim")
+        draft = self.chat("Gastei R$ 25 de transporte ontem")
+        self.assertIn("Escolha a referência", draft["response"])
+        self.chat("sim")
+        self.assertEqual(len(self.bills()), 0)
+        self.chat("Vincule item 1 a Transporte trabalho")
+        self.chat("sim")
+        bill = self.bills()[0]
+        self.assertIsNotNone(bill.expense_plan_id)
+        other = next(row for row in self.plans() if row.data["name"] == "Transporte pessoal")
+        update_spending_link(bill.id, SpendingLink(category="transporte", plan_id=other.id), self.user, self.db)
+        overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+        row = next(group for group in overview["spending"] if group["category"] == "transporte")
+        self.assertEqual(next(item for item in row["items"] if item["id"] == str(other.id))["actual"], 2500)
+        self.chat("Edite transporte para R$ 30")
+        self.chat("sim")
+        self.assertEqual(next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")["actual"], 3000)
+        self.chat("Exclua transporte")
+        self.chat("sim")
+        self.assertEqual(next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")["actual"], 0)
+
 
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")

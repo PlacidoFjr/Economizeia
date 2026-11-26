@@ -21,6 +21,7 @@ def migrate_financial_records(database_engine=engine):
     from sqlalchemy import text
     with database_engine.begin() as conn:
         conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS installment_group_id UUID"))
+        conn.execute(text("ALTER TABLE bills ADD COLUMN IF NOT EXISTS expense_plan_id VARCHAR(36)"))
         conn.execute(text("ALTER TABLE savings_goals ALTER COLUMN deadline DROP NOT NULL"))
         conn.execute(text("ALTER TABLE payments ALTER COLUMN method DROP NOT NULL"))
 

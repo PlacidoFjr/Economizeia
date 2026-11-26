@@ -18,6 +18,7 @@ from app.services.financial_chat_parser import (
 )
 from app.services.financial_chat_records import apply_item, bill_snapshot, matching_open_bills, matching_plan_rows, mutation_draft
 from app.services.financial_overview import answer, financial_data, overview_from_data
+from app.services.financial_spending import references, reference_candidates
 
 
 class FinancialChatState(Base):
@@ -109,11 +110,15 @@ def describe(item):
         installments = f' · {len(charges)} parcelas de {charge_text} · primeiro vencimento'
     linked = " · vinculado ao compromisso existente" if item.get("linked_bill") or item.get("linked_plan") else ""
     account = f' · conta: {item["account"]}' if item.get("account") else ""
-    return f'{label}: {item["name"]} · {brl(item["amount_cents"])} · {status}{installments} · {when}{payer}{account}{linked}'
+    return f'{label}: {item["name"]} · {brl(item["amount_cents"])} · {status}{installments} · {when}{payer}{account}{linked} · categoria: {item["category"]}'
 
 
 def preview(state):
     items = "\n".join(f"{index}. {describe(item)}" for index, item in enumerate(state.draft, 1))
+    for index, item in enumerate(state.draft, 1):
+        if item.get("reference_options"):
+            names = ", ".join(option["name"] for option in item["reference_options"])
+            items += f'\nEscolha a referência do item {index}: {names}. Responda “Vincule item {index} a NOME”.'
     return reply(
         "Confira o rascunho antes de confirmar.\n\n" + items +
         "\n\nVocê pode confirmar, cancelar ou corrigir um item pelo número.",
@@ -189,6 +194,17 @@ def bind_existing(db, uid, items):
                 if len(plans) == 1 and plans[0].id not in used:
                     used.add(plans[0].id)
                     item["linked_plan"] = str(plans[0].id)
+        if item.get("kind") == "expense" and item.get("frequency") == "actual" and item["payer"] != "third":
+            options = references(db.query(FinancialPlanItem).filter_by(user_id=uid).all(), item["month"])
+            candidates = reference_candidates(item["name"], item["category"], options)
+            selected = next((option for option in options if option["id"] == item.get("expense_plan_id")), None)
+            if selected:
+                item["category"] = selected["category"]
+            elif len(candidates) == 1:
+                item["expense_plan_id"] = candidates[0]["id"]
+                item.pop("reference_options", None)
+            elif len(candidates) > 1:
+                item["reference_options"] = candidates
         result.append(item)
     return result, None
 
@@ -204,6 +220,18 @@ def correct_draft(message, state, today):
     item = dict(state.draft[index])
     if item.get("operation"):
         return None, "Cancele o rascunho e informe a alteração atualizada para o lançamento existente."
+    link = re.match(r"^vincul(?:e|ar)\s+(?:o\s+)?item\s+\d+\s+(?:a|ao|para)\s+(.+)", text)
+    if link:
+        options = item.get("reference_options", [])
+        target = next((option for option in options if norm(option["name"]) == link.group(1).strip()), None)
+        if not target:
+            return None, "Escolha uma das referências exibidas para o item."
+        item["expense_plan_id"] = target["id"]
+        item["category"] = target["category"]
+        item.pop("reference_options", None)
+        revised = list(state.draft)
+        revised[index] = item
+        return revised, None
     text = re.sub(r"\bitem\s+\d+\b", "", text)
     new_name = re.search(r"\b(?:descrição|descri[cç][aã]o|nome)\s*(?::|para)?\s+(.+)", message, re.I)
     if new_name:
@@ -300,9 +328,22 @@ def process_message(message, user, state, db, now, expected_draft):
             return reply("Não existe rascunho pendente. Envie o que deseja cadastrar.")
         if pending[0].get("missing"):
             return reply(pending[0]["prompt"], "ask_for_info")
+        if any(item.get("reference_options") for item in pending):
+            return preview(state)
         ids = [bill_id for item in pending for bill_id in apply_item(db, user.id, item, FinancialPlanItem)]
+        db.flush()
+        expense_items = [item for item in pending if not item.get("operation") and item.get("kind") == "expense" and item.get("frequency") == "actual"]
+        impact = []
+        for period in sorted({item["month"] for item in expense_items}):
+            overview = monthly_financial_overview(db, user.id, period, today)
+            for group in overview["spending"]:
+                if group["planned"] is not None and any(item["category"] == group["category"] for item in expense_items):
+                    remaining = group["remaining"]
+                    suffix = f"Restam {brl(remaining)}" if remaining >= 0 else f"Excesso de {brl(-remaining)}"
+                    impact.append(f'{group["category"].capitalize()}: {brl(group["actual"])} de {brl(group["planned"])} previstos em {period}. {suffix}.')
+        total_text = f'\nTotal de despesas registradas: {brl(sum(item.get("personal_cents") or item["amount_cents"] for item in expense_items))}.' if expense_items else ""
         set_draft(state, [], now)
-        return reply(f"Concluí {len(pending)} operação(ões).\n\n" + "\n".join("• " + describe(item) for item in pending),
+        return reply(f"Concluí {len(pending)} operação(ões).\n\n" + "\n".join("• " + describe(item) for item in pending) + total_text + ("\n\n" + "\n".join(impact) if impact else ""),
                      "transactions_created", ids[0] if ids else None)
 
     take_quota(user, today)
