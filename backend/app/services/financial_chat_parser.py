@@ -178,6 +178,7 @@ def interpret(message, today):
     """Return draft items and unresolved lines; never mutate storage."""
     items, unresolved = [], []
     section, owner, monthly, section_payer = "", "self", False, None
+    section_planned = False
     account = None
     lines = re.split(r"\r?\n|;(?!\s*minha parte\b)", message, flags=re.I)
     for raw in lines:
@@ -190,10 +191,11 @@ def interpret(message, today):
         if re.match(r"^(regras|objetivo|instrucoes|observacoes)\b", n) and not MONEY.search(n):
             section = "ignore"
             continue
-        if re.match(r"^(minha renda|receitas?|renda|despesas|gastos|meus gastos|orcamento|metas|compromissos|dividas|pagos por)", n) and not MONEY.search(n) and len(n) < 100:
+        if re.match(r"^(minha renda|receitas?|renda|despesas|gastos|meus gastos|orcamento|metas|compromissos|dividas|pagos por|planejamento)", n) and not MONEY.search(n) and len(n) < 100:
+            section_planned = bool(re.search(r"\bprevist[oa]s?\b|\bplanejad[oa]s?\b|\ba (?:receber|pagar)\b|^(?:compromissos|dividas|planejamento)\b", n))
             section_payer = responsible_party(n)
             owner = "third" if section_payer or re.search(r"terceiro|outras pessoas", n) else "self"
-            monthly = "mens" in n or n.startswith(("minha renda", "renda", "receita", "despesas pagas", "meus gastos", "orcamento"))
+            monthly = bool(re.search(r"\bmens(?:al|ais)\b|\bpor mes\b", n))
             section = "income" if n.startswith(("minha renda", "renda", "receita")) else ("budget" if n.startswith(("orcamento", "meta")) else "expense")
             if n.startswith(("compromissos", "dividas")):
                 monthly = False
@@ -208,7 +210,7 @@ def interpret(message, today):
             continue
         if re.match(r"^(duracao do contrato|duracao|prazo do contrato)\b", n):
             duration = re.search(r"\b(\d+)\s*mes", n)
-            if duration and items and items[-1].kind == "income" and 1 <= int(duration.group(1)) <= 120:
+            if duration and items and items[-1].kind == "income" and items[-1].frequency == "monthly" and 1 <= int(duration.group(1)) <= 120:
                 items[-1].months = int(duration.group(1))
             else:
                 unresolved.append(line)
@@ -260,9 +262,8 @@ def interpret(message, today):
         has_month = any(re.search(r"\b" + m + r"\b", n) for m in MONTHS) or "proximo mes" in n or "mes passado" in n
         is_weekly = bool(re.search(r"semanal|por semana|toda semana|cada semana", n))
         is_yearly = bool(re.search(r"anual|por ano|todo ano|cada ano", n))
-        habitual_third = bool(re.search(r"\b(?:meu pai|minha mae|meu irmao|minha irma) paga (?:minha|meu)\b", n))
-        is_monthly = bool(re.search(r"mens(?:al|ais)|por mes|/mes|todo mes|cada mes", n)) or (
-            (monthly or habitual_third) and not has_month and not day and not is_weekly and not is_yearly
+        is_monthly = bool(re.search(r"mens(?:al(?:mente)?|ais)|por mes|/mes|todo mes|cada mes", n)) or (
+            monthly and not has_month and not day and not is_weekly and not is_yearly
         )
         duration = re.search(r"\b(" + COUNT + r")\s*mes(?:es)?\b", n)
         months = (NUMBER_WORDS.get(duration.group(1)) or int(duration.group(1))) if duration else None
@@ -284,13 +285,39 @@ def interpret(message, today):
             kind = "expense"
         installment_count = int(split.group(1)) if split else None
         recurring = is_monthly or is_weekly or is_yearly
-        actual_signal = re.search(r"\b(gastei|paguei|comprei|recebi|ganhei|pago|pagou|recebido|ja paga|bota|coloca|lanca|gaste|receby)\b", n)
-        actual = bool(actual_signal or day and day <= today and re.search(r"\bpaga\b", n)) and not recurring and not split and not re.search(r"\b(previsto|prevista|planejado|planejada|futuro|vou|limite|vence|vencimento)\b", n)
-        if re.search(r"\bnao\s+(?:gastei|paguei|pagou|pago|recebi|ganhei|comprei)\b", n):
-            unresolved.append(line + " (confirme se a despesa ou receita e apenas prevista)")
+        future_language = bool(re.search(
+            r"\b(?:previst[oa]s?|planejad[oa]s?|agendad[oa]s?|previsao|planejamento|"
+            r"futur[oa]s?|vence|vencimento|planeje|agende)\b|"
+            r"\b(?:vou|vai|sera|devera|irei|devo)\s+(?:receber|ganhar|pagar|gastar|comprar|"
+            r"depositar|cair|ser|depositad[oa]|creditad[oa])\b|"
+            r"\ba (?:receber|pagar|ser depositad[oa])\b|^divida\b", n
+        ))
+        completed = bool(re.search(
+            r"\b(?:gastei|paguei|comprei|recebi|ganhei|pago|pagou|recebid[oa]|depositad[oa]|"
+            r"depositaram|creditad[oa]|caiu|ja paga|gaste|receby)\b", n
+        ))
+        denied = re.search(
+            r"\bnao\s+(?:(?:foi|esta|fui|tinha sido|foi ainda)\s+)?"
+            r"(?:gastei|paguei|pagou|pag[oa]|recebi|ganhei|comprei|caiu|"
+            r"depositaram|depositad[oa]|creditad[oa]|recebid[oa])\b", n
+        )
+        if denied:
+            unresolved.append(line + " (confirme se deseja cadastrar uma previsão)")
             continue
-        if kind in ("reserve", "budget"):
-            actual = False
+        period = get_month(line, today)
+        dated_future = day > today if day else period > today.strftime("%Y-%m")
+        projected = future_language or section_planned or (
+            not completed and (dated_future or until is not None or re.search(r"\ba partir de\b", n))
+        )
+        actual = kind in ("income", "expense") and not projected and not split
+        if (actual and payer != "self" and not completed and not day
+                and re.search(r"\bpaga\b", n)):
+            unresolved.append(line + " (informe se a despesa já foi paga ou é uma previsão)")
+            continue
+        if actual and recurring:
+            # A frequência sozinha não transforma uma movimentação em previsão.
+            is_weekly = is_monthly = is_yearly = recurring = False
+            months = until = None
         if installment_count is not None and (kind != "expense" or payer != "self" or recurring or day is None or not 2 <= installment_count <= min(amount, 120)):
             unresolved.append(line + " (informe entre 2 e 120 parcelas e a data do primeiro vencimento)")
             continue
@@ -345,7 +372,7 @@ def interpret(message, today):
         frequency = "weekly" if is_weekly else "yearly" if is_yearly else "monthly" if is_monthly else "once"
         items.append(Item(name=name, amount_cents=amount, kind=kind, payer=payer,
                           frequency="actual" if actual else frequency,
-                          month=day.strftime("%Y-%m") if day else get_month(line, today),
+                          month=day.strftime("%Y-%m") if day else period,
                           day=day.isoformat() if day else None, months=months if is_monthly else None,
                           category=category(name, kind), account=account if kind == "income" else None,
                           payer_name=payer_name, until=until.isoformat() if until else None,

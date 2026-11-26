@@ -48,7 +48,7 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         return self.db.query(FinancialPlanItem).filter_by(user_id=self.uid).all()
 
     def test_confirmation_and_duplicate(self):
-        message = "Gastei R$ 35 no Uber hoje\nAcademia: R$ 150/mês, paga pelo meu pai\nReserva: R$ 400/mês"
+        message = "Gastei R$ 35 no Uber hoje\nAcademia: R$ 150/mês previsto, paga pelo meu pai\nReserva: R$ 400/mês"
         self.assertEqual(self.chat(message)["action"], "confirm_transactions")
         self.assertEqual(len(self.bills()), 0)
         self.assertEqual(len(self.plans()), 0)
@@ -83,7 +83,7 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(self.db.query(Bill).filter_by(user_id=other.id).count(), 0)
 
     def test_ambiguity_never_partially_saves(self):
-        result = self.chat("Mercado: R$ 100/mês\nR$ 400 previstos para fim de semana")
+        result = self.chat("Mercado: R$ 100/mês previsto\nR$ 400 previstos para fim de semana")
         self.assertEqual(result["action"], "ask_for_info")
         self.chat("sim")
         self.assertEqual(len(self.plans()), 0)
@@ -129,7 +129,7 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertIsNone(goal.deadline)
 
     def test_summary_simulation_and_payment_links(self):
-        self.chat("Mercado: R$ 100 todo mês\nAcademia: R$ 140, meu pai pagou ontem\nRecebi 2 mil do trabalho")
+        self.chat("Mercado: R$ 100 previsto todo mês\nAcademia: R$ 140, meu pai pagou ontem\nRecebi 2 mil do trabalho")
         self.assertEqual(self.chat("sim")["action"], "transactions_created")
         self.assertIn("Simulação", self.chat("Se eu gastar R$ 500, quanto vai sobrar?")["response"])
         self.assertIsNone(read_history(self.db, self.uid)["draft"])
@@ -145,6 +145,25 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-12")["planned"]["expense"], 10000)
         self.assertIn("100,00", self.chat("Quanto gastei com alimentação?")["response"])
         self.assertIn("Nenhum gasto", self.chat("E em dezembro?")["response"])
+
+    def test_deposited_monthly_salary_realizes_existing_forecast_once(self):
+        self.chat("Salário visão: R$ 2.000 previstos por mês")
+        self.chat("sim")
+        draft = self.chat("Salario depositado visão 2000 mensal")
+        self.assertEqual(draft["action"], "confirm_transactions")
+        self.assertIn("realizado", draft["response"])
+        self.assertIn("vinculado", draft["response"])
+        self.assertEqual(len(self.bills()), 0)
+        self.chat("confirmar", expected_draft=draft["draft_id"])
+
+        self.assertEqual(len(self.plans()), 1)
+        self.assertEqual(len(self.bills()), 1)
+        self.assertEqual(self.bills()[0].status, BillStatus.PAID)
+        overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+        self.assertEqual(overview["actual"]["income"], 200000)
+        self.assertEqual(overview["actual"]["balance"], 200000)
+        self.assertEqual(overview["planned"]["income"], 0)
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-12")["planned"]["income"], 200000)
 
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")

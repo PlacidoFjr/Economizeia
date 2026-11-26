@@ -25,16 +25,16 @@ class FinancialChatParserTests(unittest.TestCase):
         self.assertEqual(classify("Paguei 35 no mercado ontem"), Intent.REGISTER)
 
     def test_monthly_plan(self):
-        items, issues = interpret("""RECEITA
+        items, issues = interpret("""RECEITA PREVISTA
 - Contrato PJ Empresa Exemplo: R$ 2.000,00 por mês, durante 6 meses.
 - Conta de recebimento: Conta Exemplo PJ.
-DESPESAS PAGAS POR MIM
+DESPESAS PRÓPRIAS PREVISTAS
 - Moradia: R$ 40,00/mês.
 - Ônibus e metrô: R$ 100,00/mês.
 - Uber/moto: R$ 60,00/mês.
 - Alimentação/proteínas: R$ 400,00/mês.
 - DAS MEI: R$ 86,05/mês.
-DESPESAS PAGAS PELO MEU PAI
+DESPESAS PREVISTAS PAGAS PELO MEU PAI
 - Academia: R$ 150,00/mês.
 - Spotify: R$ 12,90/mês.
 - YouTube: R$ 16,90/mês.
@@ -78,16 +78,16 @@ REGRAS IMPORTANTES
             self.assertTrue(issues, line)
 
     def test_duplicate_key(self):
-        a, _ = interpret("Academia: R$ 150/mês, paga pelo meu pai", self.today)
-        b, _ = interpret("academia: R$ 150,00 por mês, paga pelo meu pai", self.today)
+        a, _ = interpret("Academia: R$ 150/mês previsto, paga pelo meu pai", self.today)
+        b, _ = interpret("academia: R$ 150,00 por mês previsto, paga pelo meu pai", self.today)
         self.assertEqual(item_key(asdict(a[0])), item_key(asdict(b[0])))
 
     def test_informal_batch_and_word_duration(self):
-        text = """RECEITAS
+        text = """RECEITAS PREVISTAS
 - Contrato PJ: R$ 2.000 mensais durante seis meses.
-DESPESAS PRÓPRIAS
+DESPESAS PRÓPRIAS PREVISTAS
 - Moradia: R$ 40 mensais.
-DESPESAS PAGAS POR TERCEIROS
+DESPESAS PREVISTAS PAGAS POR TERCEIROS
 - Academia: R$ 150 mensais.
 METAS
 - Guardar R$ 400 mensais.
@@ -107,6 +107,31 @@ ORÇAMENTO
             parsed, issues = interpret(message, self.today)
             self.assertFalse(issues)
             self.assertEqual((parsed[0].name, parsed[0].amount_cents, parsed[0].kind), (description, amount, kind))
+
+    def test_movements_are_realized_unless_explicitly_planned(self):
+        for line, kind, frequency in [
+            ("Salario depositado visão 2000 mensal", "income", "actual"),
+            ("Salário: R$ 2.000 mensal", "income", "actual"),
+            ("Recebi R$ 2.000 de salário mensal", "income", "actual"),
+            ("Mercado: R$ 50 mensalmente", "expense", "actual"),
+            ("Mercado 50", "expense", "actual"),
+            ("Salário previsto: R$ 2.000 mensal", "income", "monthly"),
+            ("Salário será depositado: R$ 2.000 mensal", "income", "monthly"),
+            ("Mercado: R$ 50 previsto mensal", "expense", "monthly"),
+            ("Vou comprar uma cadeira de R$ 500 amanhã", "expense", "once"),
+            ("Conta de luz: R$ 100 amanhã", "expense", "once"),
+        ]:
+            with self.subTest(line=line):
+                items, issues = interpret(line, self.today)
+                self.assertFalse(issues)
+                self.assertEqual((items[0].kind, items[0].frequency), (kind, frequency))
+                if frequency == "actual":
+                    self.assertEqual(items[0].day, self.today.isoformat())
+
+        for line in ["Salário não foi depositado R$ 2.000 mensal", "Recebi R$ 2.000 de salário amanhã"]:
+            items, issues = interpret(line, self.today)
+            self.assertFalse(items)
+            self.assertTrue(issues)
 
     def test_weekly_yearly_and_shared(self):
         items, issues = interpret("""Transporte: R$ 20 por semana a partir de 01/12/2026 até 30/12/2026

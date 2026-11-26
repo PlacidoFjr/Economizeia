@@ -88,12 +88,20 @@ def mutation_draft(db, uid, message, intent, today):
     }, None
 
 
+def matching_name(name, kind):
+    normalized = norm(name or "").strip()
+    if kind == "income":
+        normalized = re.sub(r"\b(?:depositad[oa]|recebid[oa]|creditad[oa])\b", "", normalized)
+        normalized = " ".join(normalized.split())
+    return normalized
+
+
 def matching_open_bills(db, uid, item):
     amount = item.get("personal_cents") or item["amount_cents"]
     bill_type = BillType.INCOME if item["kind"] == "income" else BillType.EXPENSE
     return [
         b for b in scoped_bills(db, uid).filter(Bill.type == bill_type).all()
-        if is_open(b) and money_cents(b.amount) == amount and norm(b.issuer or "").strip() == norm(item["name"]).strip()
+        if is_open(b) and money_cents(b.amount) == amount and matching_name(b.issuer, item["kind"]) == matching_name(item["name"], item["kind"])
         and b.due_date and b.due_date.strftime("%Y-%m") == item["month"]
     ]
 
@@ -104,7 +112,7 @@ def matching_plan_rows(db, uid, item, plan_model):
         row for row in rows
         if row.data["payer"] == "self" and row.data["frequency"] != "actual"
         and not row.data.get("materialized") and row.data["kind"] == item["kind"]
-        and norm(row.data["name"]).strip() == norm(item["name"]).strip()
+        and matching_name(row.data["name"], item["kind"]) == matching_name(item["name"], item["kind"])
         and row.data["amount_cents"] == (item.get("personal_cents") or item["amount_cents"])
         and occurrence_count(row.data, item["month"]) > len(row.data.get("settled", {}).get(item["month"], []))
     ]
