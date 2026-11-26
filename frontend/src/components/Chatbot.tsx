@@ -135,7 +135,7 @@ export default function Chatbot() {
       if (['transactions_created', 'expense_created', 'income_created'].includes(data.action)) {
         await Promise.all([
           ...updates,
-          ...['bills', 'finances', 'financial-overview', 'financial-plan-items', 'savings-goals', 'payments', 'installment-bills']
+          ...['bills', 'finances', 'financial-overview', 'financial-plan-items', 'savings-goals', 'payments', 'installment-bills', 'third-party-expenses']
             .map(key => queryClient.invalidateQueries({ queryKey: [key] })),
         ])
       } else {
