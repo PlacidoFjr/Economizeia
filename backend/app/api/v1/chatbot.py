@@ -3,6 +3,8 @@ import logging
 import re
 from typing import Optional, List, Dict
 from uuid import UUID
+from datetime import date
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -19,10 +21,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class QuickEntry(BaseModel):
+    kind: Literal["expense", "income"]
+    name: str = Field(min_length=1, max_length=180)
+    amount_cents: int = Field(gt=0, le=10_000_000_000, strict=True)
+    day: date
+
+
 class ChatMessage(BaseModel):
     message: str = Field(min_length=1, max_length=16000)
     conversation_history: Optional[List[Dict]] = None  # legacy client compatibility; never trusted for writes
     request_id: Optional[UUID] = None
+    entry: Optional[QuickEntry] = None
     draft_id: Optional[str] = Field(default=None, max_length=64)
 
 
@@ -36,7 +46,7 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 def chat_with_assistant(chat_data: ChatMessage, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        return handle_financial_chat(chat_data.message, current_user, db, chat_data.request_id, chat_data.draft_id)
+        return handle_financial_chat(chat_data.message, current_user, db, chat_data.request_id, chat_data.draft_id, chat_data.entry.model_dump(mode="json") if chat_data.entry else None)
     except HTTPException:
         db.rollback()
         raise

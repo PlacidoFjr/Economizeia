@@ -412,14 +412,14 @@ def process_message(message, user, state, db, now, expected_draft):
     return preview(state)
 
 
-def handle_financial_chat(message, current_user, db, request_id=None, expected_draft=None):
+def handle_financial_chat(message, current_user, db, request_id=None, expected_draft=None, entry=None):
     now = datetime.now(timezone.utc)
     uid = current_user.id
     user = lock_user(db, uid)
     if request_id:
         prior = db.get(FinancialChatTurn, (uid, request_id))
         if prior:
-            if prior.message != message:
+            if prior.message != message or (entry is not None and prior.result.get("entry") != entry):
                 raise HTTPException(status_code=409, detail="Esta requisição já foi usada para outra mensagem.")
             db.commit()
             return prior.result
@@ -427,7 +427,25 @@ def handle_financial_chat(message, current_user, db, request_id=None, expected_d
     if state is None:
         state = FinancialChatState(user_id=uid, draft=[])
         db.add(state)
-    result = process_message(message, user, state, db, now, expected_draft)
+    if entry is not None:
+        today = user_today(user)
+        if date.fromisoformat(entry["day"]) > today:
+            raise HTTPException(422, "Informe a data em que o lançamento aconteceu.")
+        name = entry["name"].strip()
+        if not name or any(char in name for char in "\n\r"):
+            raise HTTPException(422, "Informe uma descrição em uma linha.")
+        if state.draft and state.expires_at and state.expires_at > now:
+            raise HTTPException(409, "Confirme ou cancele o rascunho pendente antes de adicionar outro lançamento.")
+        take_quota(user, today)
+        item = {"kind": entry["kind"], "name": name, "amount_cents": entry["amount_cents"],
+                "day": entry["day"], "month": entry["day"][:7], "frequency": "actual",
+                "payer": "self", "category": category(name, entry["kind"])}
+        # An explicit form entry is a separate movement, even when its value matches another.
+        set_draft(state, [item], now)
+        result = preview(state)
+        result["entry"] = entry
+    else:
+        result = process_message(message, user, state, db, now, expected_draft)
     db.add(FinancialChatTurn(user_id=uid, request_id=request_id or uuid4(), message=message, result=result))
     db.commit()
     return result

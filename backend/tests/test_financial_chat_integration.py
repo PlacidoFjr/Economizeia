@@ -318,6 +318,23 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(overview["actual"]["balance"], -1200)
         self.assertEqual(self.db.get(Bill, bid).status, BillStatus.PAID)
 
+    def test_quick_entry_is_confirmed_and_preserves_selected_type(self):
+        entry = {"kind": "expense", "name": "Reserva de hotel", "amount_cents": 12590, "day": "2026-11-25"}
+        request_id = uuid.uuid4()
+        draft = self.chat("Gasto extra: Reserva de hotel", request_id=request_id, entry=entry)
+        self.assertEqual(draft["action"], "confirm_transactions")
+        self.assertIn("Despesa", draft["response"])
+        self.assertEqual(len(self.bills()), 0)
+        self.assertEqual(self.chat("Gasto extra: Reserva de hotel", request_id=request_id, entry=entry), draft)
+        self.chat("sim", expected_draft=draft["draft_id"])
+        self.assertEqual(len(self.bills()), 1)
+        self.assertEqual(self.bills()[0].amount, 125.9)
+        income = dict(entry, kind="income", name="Venda")
+        second = self.chat("Receita: Venda", entry=income)
+        self.chat("sim", expected_draft=second["draft_id"])
+        self.assertEqual(len(self.bills()), 2)
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-11")["actual"]["balance"], 0)
+
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")
         self.chat("sim")
