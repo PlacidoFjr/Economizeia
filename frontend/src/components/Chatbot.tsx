@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'motion/react'
 import api from '../services/api'
 import ConfirmDialog from './ConfirmDialog'
+import QuickEntryForm, { type QuickEntry } from './QuickEntryForm'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Message {
@@ -32,7 +33,7 @@ const QUICK_QUESTIONS = [
 type ChatResult = { response: string; action: string; draft_id?: string | null }
 type ChatTurn = { id: string; message: string; result: ChatResult; created_at: string }
 type ChatHistory = { turns: ChatTurn[]; draft: ChatResult | null }
-type ChatRequest = { message: string; request_id: string; draft_id?: string }
+type ChatRequest = { message: string; request_id: string; draft_id?: string; entry?: QuickEntry }
 
 function ChatMessageText({ text }: { text: string }) {
   const sections = text.split('\n\n')
@@ -56,6 +57,7 @@ export default function Chatbot() {
   const historyKey = ['financial-chat-history', user?.id]
   const [isOpen, setIsOpen] = useState(false)
   const [inputText, setInputText] = useState('')
+  const [quickKind, setQuickKind] = useState<QuickEntry['kind'] | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [sending, setSending] = useState<ChatRequest | null>(null)
@@ -85,6 +87,7 @@ export default function Chatbot() {
 
   const closeChat = () => {
     setIsOpen(false)
+    setQuickKind(null)
     requestAnimationFrame(() => launcherRef.current?.focus())
   }
 
@@ -374,8 +377,21 @@ export default function Chatbot() {
             </div>
           )}
 
+          {!draft && !isLoading && !history.isPending && !history.isError && (
+            <div className="shrink-0 border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:px-4">
+              {quickKind ? <QuickEntryForm key={quickKind} kind={quickKind} onCancel={() => setQuickKind(null)} onSubmit={entry => {
+                const amount = (entry.amount_cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                const message = (entry.kind === 'expense' ? 'Gasto extra' : 'Receita') + ': ' + entry.name + ' · ' + amount + ' · ' + entry.day.split('-').reverse().join('/')
+                setQuickKind(null)
+                void submit({ message, request_id: crypto.randomUUID(), draft_id: 'none', entry })
+              }} /> : <div className="flex gap-2">
+                <button type="button" onClick={() => setQuickKind('expense')} className="min-h-10 rounded-md bg-teal-800 px-3 text-sm font-semibold text-white">+ Gasto extra</button>
+                <button type="button" onClick={() => setQuickKind('income')} className="min-h-10 rounded-md border border-slate-300 px-3 text-sm font-semibold">+ Receita</button>
+              </div>}
+            </div>
+          )}
           {/* Input */}
-          <div className="safe-area-bottom border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:p-4">
+          {!quickKind && <div className="safe-area-bottom border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:p-4">
             <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Enter envia · Shift + Enter adiciona uma linha</p>
             <div className="flex space-x-2">
               <textarea
@@ -403,7 +419,7 @@ export default function Chatbot() {
                 <Send className="w-4 h-4 sm:w-4 sm:h-4" />
               </button>
             </div>
-          </div>
+          </div>}
         </motion.div>
       )}
       </AnimatePresence>
