@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import api from '../services/api'
+import FinancialPlanManager from './FinancialPlanManager'
 
 type Item = { id: string; name: string; amount_cents: number; kind: 'income' | 'expense' | 'budget' | 'reserve'; payer: string; payer_name?: string; shared?: boolean; frequency: string; month: string; day?: string; months?: number; occurrence_count?: number }
 export type FinancialActivityRow = { id: string; name: string; amount_cents: number; day: string; type: 'expense' | 'income'; status: string; category?: string }
@@ -17,6 +18,7 @@ const groups = [
   { title: 'Despesas pagas por terceiros', test: (i: Item) => i.frequency === 'actual' && i.payer === 'third' },
   { title: 'Limites de orçamento', test: (i: Item) => i.kind === 'budget' },
   { title: 'Metas de reserva', test: (i: Item) => i.kind === 'reserve' },
+  { title: 'Despesas compartilhadas previstas', test: (i: Item) => i.kind === 'expense' && i.payer === 'shared' && i.frequency !== 'actual' },
 ]
 export function useFinancialOverview(month: Date) {
   const key = format(month, 'yyyy-MM')
@@ -35,7 +37,7 @@ export default function FinancialPlanning({ month, mode = 'all' }: { month: Date
   if (isError || !data) return <section className={card}><p>Não foi possível carregar o planejamento.</p><button onClick={() => refetch()} className="mt-2 underline">Tentar novamente</button></section>
   const p = data.planned
   const a = data.actual
-  const visible = groups.filter((_, i) => mode === 'all' || (mode === 'expenses' && i >= 1 && i <= 3) || (mode === 'reserve' && i === 5))
+  const visible = groups.filter((_, i) => mode === 'all' || (mode === 'expenses' && ((i >= 1 && i <= 3) || i === 6)) || (mode === 'reserve' && i === 5))
   const metrics = mode === 'all' ? [
     ['Receita prevista', p.income], ['Despesas próprias previstas', p.expense], ['Despesas previstas de terceiros', p.third],
     ['Limite de orçamento', p.budget], ['Meta de reserva', p.reserve], ['Disponível planejado', p.available],
@@ -44,6 +46,7 @@ export default function FinancialPlanning({ month, mode = 'all' }: { month: Date
   ] as [string, number][] : []
   return <section className={card + ' space-y-4 text-slate-900 dark:text-slate-100'}>
     <div><h2 className="text-lg font-bold">{mode === 'reserve' ? 'Reservas planejadas' : 'Planejamento financeiro'}</h2><p className="text-sm text-slate-500 dark:text-slate-400 capitalize">{label(data.month)}</p></div>
+    {mode === 'all' && <FinancialPlanManager />}
     {mode === 'all' && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([name, amount]) => <div key={name} className="rounded-md border border-slate-200 p-3 dark:border-slate-700"><p className="text-xs text-slate-500 dark:text-slate-400">{name}</p><p className="mt-1 text-lg font-semibold tabular-nums break-words">{money(amount)}</p></div>)}</div>}
     {mode === 'all' && <p className="text-xs text-slate-500 dark:text-slate-400">O disponível planejado considera receitas e despesas previstas, limites e reservas. Gastos de terceiros entram no custo de vida.</p>}
     {visible.map(g => {
