@@ -85,7 +85,7 @@ function PlanForm({ item, busy, error, onCancel, onSave }: {
     onSave({
       version, kind, payer, frequency, name: name.trim(), amount_cents: cents, personal_cents: share,
       month: day?.slice(0, 7) || month, day: day || null, category: category || 'outras',
-      account: kind === 'income' ? account || null : null,
+      account: kind === 'income' || (kind === 'expense' && payer !== 'self') ? account || null : null,
       payer_name: payer !== 'self' ? payer_name || null : null,
       until: recurring ? until || null : null,
       months: frequency === 'monthly' ? months || null : null,

@@ -18,6 +18,7 @@ const TermosUso = lazy(() => import('./pages/TermosUso'))
 const Privacidade = lazy(() => import('./pages/Privacidade'))
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const ThirdPartyExpenses = lazy(() => import('./pages/ThirdPartyExpenses'))
 const Finances = lazy(() => import('./pages/Finances'))
 const Payments = lazy(() => import('./pages/Payments'))
 const Installments = lazy(() => import('./pages/Installments'))
@@ -70,6 +71,7 @@ function App() {
                   <Route path="bills/add" element={<Navigate to="/app/transactions/add" replace />} />
                   <Route path="bills/:id" element={<Navigate to="/app/finances" replace />} />
                   <Route path="transactions/add" element={<PageSuspense><AddExpense /></PageSuspense>} />
+                  <Route path="third-party" element={<PageSuspense><ThirdPartyExpenses /></PageSuspense>} />
                   <Route path="finances" element={<PageSuspense><Finances /></PageSuspense>} />
                   <Route path="payments" element={<PageSuspense><Payments /></PageSuspense>} />
                   <Route path="installments" element={<PageSuspense><Installments /></PageSuspense>} />
