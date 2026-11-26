@@ -274,7 +274,8 @@ def interpret(message, today):
         if months is not None and not 1 <= months <= 120:
             unresolved.append(line + " (duracao invalida)")
             continue
-        payer_name = responsible_party(n) or section_payer
+        father_card = bool(re.search(r"\bcartao (?:do meu|do) pai\b", n))
+        payer_name = ("Pai" if father_card else responsible_party(n)) or section_payer
         payer = "shared" if shared else "third" if payer_name else owner
         if re.search(r"por mim|eu pago", n):
             if not shared:
@@ -384,7 +385,7 @@ def interpret(message, today):
                           frequency="actual" if actual else frequency,
                           month=day.strftime("%Y-%m") if day else period,
                           day=day.isoformat() if day else None, months=months if is_monthly else None,
-                          category=category(name, kind), account=account if kind == "income" else None,
+                          category=category(name, kind), account=account if kind == "income" else "Cartão do pai" if father_card and payer != "self" else None,
                           payer_name=payer_name, until=until.isoformat() if until else None,
                           installments=installment_count, personal_cents=personal, goal=goal))
     return items, unresolved
