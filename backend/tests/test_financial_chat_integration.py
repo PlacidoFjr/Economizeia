@@ -299,24 +299,46 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(next(group for group in monthly_financial_overview(self.db, self.uid, "2026-11")["spending"] if group["category"] == "transporte")["actual"], 0)
 
 
-    def test_legacy_lowercase_status_does_not_break_dashboard_after_migration(self):
-        from sqlalchemy import text
+    def test_production_varchar_enums_read_write_and_filter(self):
+        from sqlalchemy import inspect, text
         from app.db.enum_compatibility import normalize_legacy_enum_labels
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TYPE billstatus ADD VALUE IF NOT EXISTS 'paid'"))
-            conn.execute(text("ALTER TYPE billtype ADD VALUE IF NOT EXISTS 'expense'"))
-        bid = uuid.uuid4()
+
+        # Match Neon production rather than creating an artificial native enum.
+        columns = {column["name"]: column["type"] for column in inspect(engine).get_columns("bills")}
+        self.assertEqual(str(columns["status"]), "VARCHAR(20)")
+        self.assertEqual(str(columns["type"]), "VARCHAR(20)")
+        expense_id, income_id = uuid.uuid4(), uuid.uuid4()
         with engine.begin() as conn:
             conn.execute(text(
                 "INSERT INTO bills (id, user_id, issuer, amount, due_date, status, type, is_bill) "
-                "VALUES (:id, :uid, 'Legacy test', 12, '2026-11-25', 'paid', 'expense', false)"
-            ), {"id": bid, "uid": self.uid})
+                "VALUES (:id, :uid, 'Legacy expense', 12, '2026-11-25', 'paid', 'expense', false)"
+            ), {"id": expense_id, "uid": self.uid})
+        # Lowercase rows must be readable even without a migration/restart.
+        self.assertEqual(self.db.get(Bill, expense_id).status, BillStatus.PAID)
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-11")["actual"]["expense"], 1200)
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO bills (id, user_id, issuer, amount, due_date, status, type, is_bill) "
+                "VALUES (:id, :uid, 'Legacy income', 200, '2026-11-25', 'PAID', 'INCOME', false)"
+            ), {"id": income_id, "uid": self.uid})
         normalize_legacy_enum_labels(engine, Base.metadata)
         self.assertEqual(normalize_legacy_enum_labels(engine, Base.metadata), 0)
+        self.db.expire_all()
+        self.assertEqual(self.db.get(Bill, income_id).type, BillType.INCOME)
+        self.assertEqual(self.db.query(Bill).filter_by(user_id=self.uid, status=BillStatus.PAID).count(), 2)
         overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+        self.assertEqual(overview["actual"]["income"], 20000)
         self.assertEqual(overview["actual"]["expense"], 1200)
-        self.assertEqual(overview["actual"]["balance"], -1200)
-        self.assertEqual(self.db.get(Bill, bid).status, BillStatus.PAID)
+        self.assertEqual(overview["actual"]["balance"], 18800)
+        draft = self.chat("Gastei R$ 5 no Uber ontem")
+        self.assertEqual(draft["action"], "confirm_transactions")
+        self.chat("sim", expected_draft=draft["draft_id"])
+        with engine.connect() as conn:
+            labels = conn.execute(text(
+                "SELECT status, type FROM bills WHERE user_id = :uid ORDER BY amount"
+            ), {"uid": self.uid}).all()
+        self.assertEqual(labels, [("paid", "expense"), ("paid", "expense"), ("paid", "income")])
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-11")["actual"]["balance"], 18300)
 
     def test_quick_entry_is_confirmed_and_preserves_selected_type(self):
         entry = {"kind": "expense", "name": "Reserva de hotel", "amount_cents": 12590, "day": "2026-11-25"}
