@@ -18,14 +18,14 @@ def references(plans, month):
     output = []
     for row in plans:
         item = row.data
-        if (item["kind"] not in ("expense", "budget") or item["frequency"] == "actual"
+        if (item["kind"] not in ("expense", "budget", "reserve") or item["frequency"] == "actual"
                 or item["payer"] not in ("self", "shared")):
             continue
         count = occurrence_count(item, month)
         if not count:
             continue
         output.append({
-            "id": str(row.id), "name": item["name"], "category": item.get("category") or category(item["name"], "expense"),
+            "id": str(row.id), "name": item["name"], "category": "reserva" if item["kind"] == "reserve" else item.get("category") or category(item["name"], "expense"),
             "kind": item["kind"], "planned": (item.get("personal_cents") or item["amount_cents"]) * count,
         })
     return output

@@ -32,6 +32,12 @@ from app.db.enum_compatibility import normalize_legacy_enum_labels
 normalized_labels = normalize_legacy_enum_labels(engine, Base.metadata)
 logger.info("Normalized %s legacy enum labels", normalized_labels)
 
+from app.db.database import SessionLocal
+from app.services.financial_chat_service import FinancialPlanItem
+from app.services.reserve_movements import backfill_reserves
+with SessionLocal() as reserve_session:
+    logger.info("Created cash outflows for %s existing reserves", backfill_reserves(reserve_session, FinancialPlanItem))
+
 # Executar migrations necessárias
 def run_migrations():
     """Executa migrations SQL necessárias."""

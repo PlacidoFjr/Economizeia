@@ -148,6 +148,12 @@ def apply_item(db, uid, item, plan_model):
     bill_type = BillType.INCOME if item["kind"] == "income" else BillType.EXPENSE
     is_actual = item["frequency"] == "actual"
     personal_amount = item.get("personal_cents") or item["amount_cents"]
+    if item["kind"] == "reserve" and is_actual:
+        from app.services.reserve_movements import sync_reserve
+        row = plan_model(user_id=uid, data=item)
+        db.add(row)
+        row.data = sync_reserve(db, row, item)
+        return [row.data["reserve_bill_id"]]
     if item["payer"] == "third" or item["kind"] not in ("income", "expense"):
         db.add(plan_model(user_id=uid, data=item))
         return []

@@ -76,6 +76,13 @@ def overview_from_data(data, month, today, history=False):
     items = []
     for row in plans:
         item = row.data
+        if item["kind"] == "reserve" and item["frequency"] == "actual":
+            bill = next((bill for bill in bills if str(bill.id) == item.get("reserve_bill_id")), None)
+            if bill is None or not is_realized(bill):
+                continue
+            day = dates.get(bill.id, bill.due_date)
+            item = dict(item, amount_cents=money_cents(bill.amount), name=bill.issuer,
+                        month=day.strftime("%Y-%m"), day=day.isoformat())
         count = occurrence_count(item, month)
         if not count:
             continue
@@ -90,20 +97,20 @@ def overview_from_data(data, month, today, history=False):
         items.append(dict(item, id=str(row.id), occurrence_count=remaining_count))
     forecast["income"] += total(open_in_month(bills, month, BillType.INCOME))
     forecast["expense"] += total(pending)
+    forecast["reserve_actual"] = total(bill for bill in expenses if bill.category == "reserva")
     spending = spending_overview(plans, expenses, month)
     reference_total = sum(group["planned"] or 0 for group in spending)
     referenced_categories = {group["category"] for group in spending if group["planned"] is not None}
     uncovered_pending = total(bill for bill in pending if bill.category not in referenced_categories)
     planned_spending = reference_total + uncovered_pending
-    reserve_total = sum(item.data["amount_cents"] for item in plans
-                        if item.data["kind"] == "reserve" and item.data["frequency"] == "actual")
+    reserve_total = total(bill for bill in bills if bill.category == "reserva" and is_realized(bill))
     result = {
         "reserve_total": reserve_total,
         "month": month,
         "spending": spending,
         "actual": {"income": income, "expense": expense, "third": forecast["third_actual"],
                    "balance": income - expense, "reserve": forecast["reserve_actual"], "pending": total(pending)},
-        "planned": {**forecast, "available": forecast["income"] - planned_spending - forecast["reserve"],
+        "planned": {**forecast, "available": forecast["income"] - planned_spending,
                     "cost_of_living": planned_spending + forecast["third"]},
         "items": items,
     }

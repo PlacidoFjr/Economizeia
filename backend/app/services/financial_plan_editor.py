@@ -14,6 +14,7 @@ from app.services.bill_movements import add_manual_bill, is_open, is_realized
 from app.services.financial_chat_parser import occurrence_dates
 from app.services.financial_chat_records import money_cents
 from app.services.financial_chat_service import FinancialPlanItem, lock_user
+from app.services.reserve_movements import reserve_bill, sync_reserve
 
 
 class PlanEdit(BaseModel):
@@ -48,7 +49,17 @@ def serialize_plan(row):
 
 def list_items(db, uid):
     rows = db.query(FinancialPlanItem).filter_by(user_id=uid).order_by(FinancialPlanItem.created_at.desc(), FinancialPlanItem.id).all()
-    return [serialize_plan(row) for row in rows]
+    output = []
+    for row in rows:
+        item = serialize_plan(row)
+        if row.data.get("reserve_bill_id"):
+            bill = reserve_bill(db, row)
+            if bill is None or bill.status == BillStatus.CANCELLED:
+                continue
+            item.update(amount_cents=money_cents(bill.amount), name=bill.issuer,
+                        day=bill.due_date.isoformat(), month=bill.due_date.strftime("%Y-%m"))
+        output.append(item)
+    return output
 
 
 def lock_item(db, uid, item_id, version):
@@ -164,6 +175,7 @@ def update_item(db, uid, item_id, edit, today):
         if row.data.get("shared"):
             item["shared"] = True
     refresh_generated_bills(db, row, item, today)
+    item = sync_reserve(db, row, item)
     row.data = item
     db.commit()
     return serialize_plan(row)
@@ -171,6 +183,9 @@ def update_item(db, uid, item_id, edit, today):
 
 def delete_item(db, uid, item_id, version):
     row = lock_item(db, uid, item_id, version)
+    reserve = reserve_bill(db, row)
+    if reserve:
+        db.delete(reserve)
     bills = generated_bills(db, row)
     if any(is_open(bill) and not editable_bill(bill) for bill in bills):
         raise HTTPException(409, "Esta série tem um pagamento agendado. Confira o pagamento antes de excluir a série.")
