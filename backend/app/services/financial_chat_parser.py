@@ -280,7 +280,7 @@ def interpret(message, today):
         if re.search(r"por mim|eu pago", n):
             if not shared:
                 payer, payer_name = "self", None
-        if re.search(r"\b(reserva|guardar|poupar|economizar|meta)\b", n) and not re.search(r"\b(gastei|paguei)\b", n):
+        if re.search(r"\b(reserva|guardar|guardei|reservei|poupar|poupei|economizar|economizei|meta)\b", n) and not re.search(r"\b(gastei|paguei)\b", n):
             kind = "reserve"
         elif re.search(r"\b(limite|orcamento|teto)\b", n) or section == "budget":
             kind = "budget"
@@ -294,16 +294,16 @@ def interpret(message, today):
             r"\b(?:previst[oa]s?|planejad[oa]s?|agendad[oa]s?|previsao|planejamento|"
             r"futur[oa]s?|vence|vencimento|planeje|agende)\b|"
             r"\b(?:vou|vai|sera|devera|irei|devo)\s+(?:receber|ganhar|pagar|gastar|comprar|"
-            r"depositar|cair|ser|depositad[oa]|creditad[oa])\b|"
+            r"depositar|guardar|reservar|poupar|economizar|cair|ser|depositad[oa]|creditad[oa])\b|"
             r"\ba (?:receber|pagar|ser depositad[oa])\b|^divida\b", n
         ))
         completed = bool(re.search(
             r"\b(?:gastei|paguei|comprei|recebi|ganhei|pago|pagou|recebid[oa]|depositad[oa]|"
-            r"depositaram|creditad[oa]|caiu|ja paga|gaste|receby)\b", n
+            r"depositaram|creditad[oa]|caiu|ja paga|gaste|receby|guardei|reservei|poupei|economizei)\b", n
         ))
         denied = re.search(
             r"\bnao\s+(?:(?:foi|esta|fui|tinha sido|foi ainda)\s+)?"
-            r"(?:gastei|paguei|pagou|pag[oa]|recebi|ganhei|comprei|caiu|"
+            r"(?:guardei|reservei|poupei|economizei|gastei|paguei|pagou|pag[oa]|recebi|ganhei|comprei|caiu|"
             r"depositaram|depositad[oa]|creditad[oa]|recebid[oa])\b", n
         )
         if denied:
@@ -315,6 +315,9 @@ def interpret(message, today):
             not completed and (dated_future or until is not None or re.search(r"\ba partir de\b", n))
         )
         actual = kind in ("income", "expense") and not projected and not split
+        if kind == "reserve":
+            explicit_goal = bool(re.search(r"\bmeta\b", n)) and not completed
+            actual = not projected and not explicit_goal and (bool(completed) or not recurring and not re.search(r"\b(?:guardar|poupar|economizar)\b", n))
         if (actual and payer != "self" and not completed and not day
                 and re.search(r"\bpaga\b", n)):
             unresolved.append(line + " (informe se a despesa já foi paga ou é uma previsão)")
@@ -346,7 +349,7 @@ def interpret(message, today):
         if actual and day > today:
             unresolved.append(line + " (data futura: especifique que e previsto)")
             continue
-        goal = kind == "reserve" and not recurring and bool(re.search(r"\bmeta\b", n) or day and re.search(r"\bate\b", n))
+        goal = kind == "reserve" and not actual and not recurring and bool(re.search(r"\bmeta\b", n) or day and re.search(r"\bate\b", n))
         if not actual and not recurring and day is None and not has_month and not goal:
             # Do not infer the due date of a commitment.
             unresolved.append(line + " (informe o mes, a data ou se e mensal)")
@@ -361,7 +364,7 @@ def interpret(message, today):
             name = MONEY.sub("", name)
             name = name.replace("APPNOVENOVE", "99")
             name = re.sub(r"(?i)\b(?:por mês|todo mês|cada mês|primeiro vencimento|primeira parcela|que custa|meu trabalho)\b", lambda m: "Trabalho" if m.group().lower() == "meu trabalho" else "", name)
-            name = re.sub(r"(?i)\b(gastei|gaste|paguei|comprei|recebi|receby|ganhei|vou|receber|bota|coloca|lança|adicionar|registrar|cadastrar|planejar|despesa|receita|reais|conto[s]?|hoje|ontem|amanhã|mensal|mensais)\b", " ", name)
+            name = re.sub(r"(?i)\b(guardei|reservei|poupei|economizei|gastei|gaste|paguei|comprei|recebi|receby|ganhei|vou|receber|bota|coloca|lança|adicionar|registrar|cadastrar|planejar|despesa|receita|reais|conto[s]?|hoje|ontem|amanhã|mensal|mensais)\b", " ", name)
             name = re.sub(r"(?i)^\s*(?:(?:de|do|da|no|na|em|para|com|minha|meu|uma|um)\s+)+", "", name)
             name = re.sub(r"(?i)(?:\s+(?:em|no|na|para|com|começando|até|dia|de))+\s*[.,]*\s*$", "", name)
             name = re.sub(r"\s+", " ", name).strip(" -/.,")
@@ -369,6 +372,8 @@ def interpret(message, today):
             name = "Salvador Card"
         elif norm(name).strip() == "uber moto":
             name = "Uber Moto"
+        if not name and kind == "reserve":
+            name = "Reserva"
         if not name and kind == "income" and recurring:
             name = "Receita prevista"
         if not name or len(name) > 180 or norm(name) in {"gasto", "boleto", "conta", "valor"}:
@@ -428,7 +433,7 @@ def due_dates_in_month(item, month):
 
 
 def plan_totals(items, month):
-    out = dict(income=0, expense=0, third=0, budget=0, reserve=0, third_actual=0)
+    out = dict(income=0, expense=0, third=0, budget=0, reserve=0, third_actual=0, reserve_actual=0)
     for item in items:
         count = occurrence_count(item, month)
         if not count:
@@ -438,6 +443,8 @@ def plan_totals(items, month):
         if item["frequency"] == "actual":
             if item["kind"] == "expense" and item["payer"] in ("third", "shared"):
                 out["third_actual"] += total - (personal or 0)
+            if item["kind"] == "reserve":
+                out["reserve_actual"] += total
             continue
         if item["payer"] == "shared":
             out["expense"] += personal * count

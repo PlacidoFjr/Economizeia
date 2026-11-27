@@ -77,8 +77,8 @@ def validate_schedule(edit, today):
         raise HTTPException(422, "O responsável pelo pagamento se aplica às despesas.")
     if edit.payer == "shared" and (edit.personal_cents is None or edit.personal_cents >= edit.amount_cents):
         raise HTTPException(422, "Informe a sua parte, menor que o valor total.")
-    if edit.frequency == "actual" and (edit.payer != "third" or not edit.day or edit.day > today):
-        raise HTTPException(422, "Para marcar como realizado no planejamento, informe uma despesa de terceiros e a data do pagamento.")
+    if edit.frequency == "actual" and ((edit.kind, edit.payer) not in (("expense", "third"), ("reserve", "self")) or not edit.day or edit.day > today):
+        raise HTTPException(422, "Informe uma reserva guardada ou uma despesa de terceiros e a data em que aconteceu.")
     if edit.payer != "shared" and edit.personal_cents is not None:
         raise HTTPException(422, "A sua parte se aplica às despesas compartilhadas.")
 

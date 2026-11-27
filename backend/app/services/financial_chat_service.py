@@ -94,7 +94,7 @@ def describe(item):
         if item.get("until"):
             when += ' até ' + date.fromisoformat(item["until"]).strftime("%d/%m/%Y")
     status = "realizado" if frequency == "actual" else "previsto"
-    label = labels[item["kind"]]
+    label = "Reserva guardada" if item["kind"] == "reserve" and frequency == "actual" else labels[item["kind"]]
     if item.get("goal"):
         label = "Meta financeira"
         when = when if item.get("day") else "sem prazo"

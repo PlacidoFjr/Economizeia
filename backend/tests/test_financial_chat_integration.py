@@ -401,6 +401,36 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(len(self.bills()), 2)
         self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-11")["actual"]["balance"], 0)
 
+    def test_reserve_is_saved_as_guarded_and_previous_plan_is_editable(self):
+        from app.services.financial_plan_editor import PlanEdit, serialize_plan, update_item
+        with patch("app.services.financial_chat_service.today_local", return_value=date(2026, 11, 27)):
+            draft = self.chat("reserva 400 27/11")
+            self.assertIn("Reserva guardada", draft["response"])
+            self.assertIn("realizado", draft["response"])
+            confirmation = uuid.uuid4()
+            self.chat("sim", request_id=confirmation)
+            self.chat("sim", request_id=confirmation)
+            self.assertEqual(len(self.bills()), 0)
+            self.assertEqual(len(self.plans()), 1)
+            overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+            self.assertEqual(overview["actual"]["reserve"], 40000)
+            self.assertEqual(overview["actual"]["expense"], 0)
+            self.assertEqual(overview["planned"]["reserve"], 0)
+            self.assertEqual(overview["reserve_total"], 40000)
+            self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-12")["actual"]["reserve"], 0)
+
+            self.chat("Reserva prevista: R$ 200 por mês")
+            self.chat("sim")
+            planned = next(row for row in self.plans() if row.data["frequency"] == "monthly")
+            edit = serialize_plan(planned)
+            edit.pop("id")
+            edit.pop("shared")
+            edit.update(frequency="actual", day="2026-11-27", months=None)
+            update_item(self.db, self.uid, planned.id, PlanEdit(**edit), date(2026, 11, 27))
+            overview = monthly_financial_overview(self.db, self.uid, "2026-11")
+            self.assertEqual(overview["actual"]["reserve"], 60000)
+            self.assertEqual(overview["planned"]["reserve"], 0)
+
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")
         self.chat("sim")

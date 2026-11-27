@@ -72,7 +72,7 @@ def overview_from_data(data, month, today, history=False):
     expense = total(expenses)
     pending = open_in_month(bills, month)
     realized_ids = {str(bill.id) for bill in movements}
-    forecast = dict(income=0, expense=0, third=0, budget=0, reserve=0, third_actual=0)
+    forecast = dict(income=0, expense=0, third=0, budget=0, reserve=0, third_actual=0, reserve_actual=0)
     items = []
     for row in plans:
         item = row.data
@@ -95,11 +95,14 @@ def overview_from_data(data, month, today, history=False):
     referenced_categories = {group["category"] for group in spending if group["planned"] is not None}
     uncovered_pending = total(bill for bill in pending if bill.category not in referenced_categories)
     planned_spending = reference_total + uncovered_pending
+    reserve_total = sum(item.data["amount_cents"] for item in plans
+                        if item.data["kind"] == "reserve" and item.data["frequency"] == "actual")
     result = {
+        "reserve_total": reserve_total,
         "month": month,
         "spending": spending,
         "actual": {"income": income, "expense": expense, "third": forecast["third_actual"],
-                   "balance": income - expense, "pending": total(pending)},
+                   "balance": income - expense, "reserve": forecast["reserve_actual"], "pending": total(pending)},
         "planned": {**forecast, "available": forecast["income"] - planned_spending - forecast["reserve"],
                     "cost_of_living": planned_spending + forecast["third"]},
         "items": items,
@@ -220,10 +223,13 @@ def answer(data, month, query, today, intent):
     if re.search(r"\b(?:guardei|economizei|ja (?:guardei|tenho guardado))\b", n):
         saved = sum(money_cents(goal.current_amount) for goal in goals)
         return (f"Total guardado nas metas até agora: {brl(saved)}."
+                f"\nGuardado na reserva em {month}: {brl(actual['reserve'])}."
                 f"\nReserva planejada para {month}: {brl(planned['reserve'])}."
                 "\nAs metas guardam o total acumulado, sem histórico mensal de aportes.")
-    if re.search(r"guardar|reserva|economiz", n):
-        return f"Reserva planejada para {month}: {brl(planned['reserve'])}."
+    if re.search(r"guardar|guardad|reserva|economiz|poup", n):
+        return (f"Reserva em {month}\n• Planejada: {brl(planned['reserve'])}"
+                f"\n• Guardada: {brl(actual['reserve'])}"
+                f"\n• Falta reservar: {brl(max(0, planned['reserve'] - actual['reserve']))}.")
     if re.search(r"despesas? fixas|recorrent", n):
         items = [item for item in overview["items"] if item["kind"] == "expense" and item["frequency"] in ("weekly", "monthly", "yearly")]
         return f"Despesas recorrentes previstas em {month}:\n" + ("\n".join(f"• {item['name']}: {brl(item['amount_cents'] * item['occurrence_count'])}" for item in items[:25]) or "Nenhuma despesa recorrente no planejamento.")

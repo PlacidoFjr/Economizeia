@@ -12,6 +12,20 @@ from app.services.financial_chat_intents import classify, Intent
 class FinancialChatParserTests(unittest.TestCase):
     today = date(2026, 11, 25)
 
+    def test_reserve_saved_versus_planned(self):
+        for message, frequency in [
+            ("reserva 400 27/11", "actual"), ("Guardei R$ 400 hoje", "actual"),
+            ("Reserva prevista: R$ 400 por mês", "monthly"), ("Vou guardar R$ 400 amanhã", "once"),
+            ("Reserva: guardar R$ 400 por mês", "monthly"),
+        ]:
+            with self.subTest(message=message):
+                items, issues = interpret(message, date(2026, 11, 27))
+                self.assertFalse(issues)
+                self.assertEqual(items[0].kind, "reserve")
+                self.assertEqual(items[0].frequency, frequency)
+        items, issues = interpret("Não guardei R$ 400 hoje", date(2026, 11, 27))
+        self.assertFalse(items)
+
     def test_currency(self):
         self.assertEqual(cents("2.000,00"), 200000)
         self.assertEqual(cents("86,05"), 8605)
