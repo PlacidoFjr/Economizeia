@@ -22,7 +22,7 @@ def sync_reserve(db, row, item):
         bill = add_manual_bill(
             db, row.user_id, amount=float(Decimal(item["amount_cents"]) / 100),
             due_date=date.fromisoformat(item["day"]), issuer=item["name"],
-            bill_type=BillType.EXPENSE, status=BillStatus.PAID, category="reserva",
+            bill_type=BillType.EXPENSE, status=BillStatus.PAID, category="reserva", notes=item.get("notes"),
         )
     else:
         bill.amount = float(Decimal(item["amount_cents"]) / 100)

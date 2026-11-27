@@ -110,7 +110,8 @@ def describe(item):
         installments = f' · {len(charges)} parcelas de {charge_text} · primeiro vencimento'
     linked = " · vinculado ao compromisso existente" if item.get("linked_bill") or item.get("linked_plan") else ""
     account = f' · conta: {item["account"]}' if item.get("account") else ""
-    return f'{label}: {item["name"]} · {brl(item["amount_cents"])} · {status}{installments} · {when}{payer}{account}{linked} · categoria: {item["category"]}'
+    notes = f'\nDescrição: {item["notes"]}' if item.get("notes") else ""
+    return f'{label}: {item["name"]} · {brl(item["amount_cents"])} · {status}{installments} · {when}{payer}{account}{linked} · categoria: {item["category"]}{notes}'
 
 
 def preview(state):
@@ -439,7 +440,7 @@ def handle_financial_chat(message, current_user, db, request_id=None, expected_d
         take_quota(user, today)
         item = {"kind": entry["kind"], "name": name, "amount_cents": entry["amount_cents"],
                 "day": entry["day"], "month": entry["day"][:7], "frequency": "actual",
-                "payer": "self", "category": category(name, entry["kind"])}
+                "payer": "self", "category": category(name, entry["kind"]), "notes": entry.get("notes")}
         # An explicit form entry is a separate movement, even when its value matches another.
         set_draft(state, [item], now)
         result = preview(state)

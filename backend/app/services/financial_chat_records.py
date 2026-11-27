@@ -177,12 +177,14 @@ def apply_item(db, uid, item, plan_model):
         else:
             bill.status = BillStatus.PAID
             bill.due_date = day
+        if item.get("notes"):
+            bill.notes = item["notes"]
         return [str(bill.id)]
     for due, amount in zip(days, amounts):
         bill = add_manual_bill(
             db, uid, amount=float(Decimal(amount) / 100), due_date=due, issuer=item["name"],
             bill_type=bill_type, status=BillStatus.PAID if is_actual else BillStatus.PENDING,
-            category=item["category"], installment_group_id=group_id,
+            category=item["category"], installment_group_id=group_id, notes=item.get("notes"),
         )
         bill.expense_plan_id = item.get("expense_plan_id")
         output.append(str(bill.id))

@@ -18,10 +18,10 @@ def is_open(bill):
 
 
 def add_manual_bill(db: Session, user_id, *, amount, due_date, issuer, bill_type, status, category,
-                    currency="BRL", barcode=None, is_bill=False, installment_group_id=None):
+                    currency="BRL", barcode=None, is_bill=False, installment_group_id=None, notes=None):
     bill = Bill(id=uuid4(), user_id=user_id, amount=amount, due_date=due_date, issuer=issuer,
                 type=bill_type, status=status, category=category, currency=currency, barcode=barcode,
-                is_bill=is_bill, confidence=1.0, installment_group_id=installment_group_id)
+                is_bill=is_bill, confidence=1.0, installment_group_id=installment_group_id, notes=notes)
     db.add(bill)
     return bill
 

@@ -481,6 +481,47 @@ class FinancialChatIntegrationTests(unittest.TestCase):
         self.assertEqual(overview["reserve_total"], 0)
         self.assertEqual(overview["items"], [])
 
+    def test_purchase_description_survives_chat_and_edit_without_changing_balance(self):
+        import asyncio
+        from app.api.v1.bills import BillCreateRequest, DescriptionUpdate, create_bill, get_bill, list_bills, update_description
+        from pydantic import ValidationError
+        from fastapi import HTTPException
+        note = "Café; 2 pães a R$ 5 cada para casa"
+        draft = self.chat("Gastei 50 no mercado hoje | detalhes: " + note)
+        self.assertIn("Descrição: " + note, draft["response"])
+        self.chat("sim")
+        bill = self.bills()[0]
+        self.assertEqual(bill.notes, note)
+        self.assertEqual(bill.amount, 50)
+        before = monthly_financial_overview(self.db, self.uid, "2026-11")["actual"]["balance"]
+        update_description(bill.id, DescriptionUpdate(notes="Compra do café da manhã"), self.user, self.db)
+        self.db.expire_all()
+        self.assertEqual(asyncio.run(get_bill(bill.id, self.user, self.db))["notes"], "Compra do café da manhã")
+        listed = asyncio.run(list_bills(current_user=self.user, db=self.db))
+        self.assertEqual(listed[0]["notes"], "Compra do café da manhã")
+        self.assertEqual(monthly_financial_overview(self.db, self.uid, "2026-11")["actual"]["balance"], before)
+        other = User(id=uuid.uuid4(), name="Other", email=f"{uuid.uuid4()}@example.invalid", password_hash="test-only", notif_prefs={})
+        self.db.add(other)
+        self.db.commit()
+        with self.assertRaises(HTTPException) as denied:
+            update_description(bill.id, DescriptionUpdate(notes="Outra pessoa"), other, self.db)
+        self.assertEqual(denied.exception.status_code, 404)
+        with self.assertRaises(ValidationError):
+            DescriptionUpdate(notes="x" * 2001)
+        with self.assertRaises(ValidationError):
+            DescriptionUpdate(notes="Texto", amount=1)
+        update_description(bill.id, DescriptionUpdate(notes=""), self.user, self.db)
+        self.assertIsNone(self.db.get(Bill, bill.id).notes)
+        created = asyncio.run(create_bill(BillCreateRequest(issuer="Mercado", amount=30, due_date="2026-11-25", notes="  Sabonete e pasta  "), self.user, self.db))
+        self.assertEqual(created["notes"], "Sabonete e pasta")
+        self.assertEqual(self.db.get(Bill, uuid.UUID(created["id"])).notes, "Sabonete e pasta")
+
+    def test_quick_entry_preserves_purchase_description(self):
+        self.chat("Novo gasto", entry=dict(kind="expense", name="Mercado", amount_cents=5000,
+                                          day="2026-11-25", notes="Arroz e feijão"))
+        self.chat("sim")
+        self.assertEqual(self.bills()[0].notes, "Arroz e feijão")
+
     def test_edit_and_delete_confirmations(self):
         self.chat("Gastei R$ 35 no Mercado ontem")
         self.chat("sim")

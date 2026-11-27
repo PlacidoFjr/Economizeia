@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import date, datetime
 from uuid import UUID
@@ -59,7 +59,7 @@ class BillCreateRequest(BaseModel):
     due_date: str  # YYYY-MM-DD
     category: Optional[str] = None
     barcode: Optional[str] = None
-    notes: Optional[str] = None
+    notes: Optional[str] = Field(default=None, max_length=2000)
     status: Optional[str] = "confirmed"  # pending, confirmed, scheduled
     type: Optional[str] = "expense"  # expense ou income
     is_bill: Optional[bool] = False  # False para transações manuais (não-boletos)
@@ -355,7 +355,8 @@ async def create_bill(
         status=bill_status,
         bill_type=bill_type,
         is_bill=bill_data.is_bill if bill_data.is_bill is not None else False,  # False para transações manuais
-        category=bill_data.category
+        category=bill_data.category,
+        notes=(bill_data.notes or "").strip() or None,
     )
     
     db.commit()
@@ -386,7 +387,8 @@ async def create_bill(
         "status": bill.status.value,
         "type": bill.type.value,
         "category": bill.category,
-        "confidence": bill.confidence
+        "confidence": bill.confidence,
+        "notes": bill.notes,
     }
 
 
@@ -439,10 +441,29 @@ async def get_bill(
         "confidence": bill.confidence,
         "category": bill.category,
         "ocr_text": ocr_text,
+        "notes": bill.notes,
         "extracted_json": document.extracted_json if document else None,
         "image_url": image_url,  # URL da imagem do boleto
         "created_at": bill.created_at.isoformat() if bill.created_at else None
     }
+
+
+class DescriptionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    notes: str | None = Field(max_length=2000)
+
+
+@router.put("/{bill_id}/description")
+def update_description(
+    bill_id: UUID, data: DescriptionUpdate, current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    bill = db.query(Bill).filter(Bill.id == bill_id, Bill.user_id == current_user.id).with_for_update().first()
+    if bill is None:
+        raise HTTPException(404, "Lançamento não encontrado.")
+    bill.notes = data.notes or None
+    db.commit()
+    return {"id": str(bill.id), "notes": bill.notes}
 
 
 @router.post("/{bill_id}/confirm")
@@ -652,6 +673,7 @@ async def list_bills(
             "is_bill": bill.is_bill if hasattr(bill, 'is_bill') else True,  # Retrocompatibilidade
             "installment_group_id": str(bill.installment_group_id) if bill.installment_group_id else None,
             "category": bill.category,
+            "notes": bill.notes,
             "confidence": bill.confidence
         }
         for bill in bills

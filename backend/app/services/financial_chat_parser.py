@@ -122,6 +122,7 @@ class Item:
     installments: int | None = None
     personal_cents: int | None = None
     goal: bool = False
+    notes: str | None = None
 
 
 def money_matches(text):
@@ -184,9 +185,17 @@ def interpret(message, today):
     footer = re.search(r"(?:^|\n)\s*(despesas|gastos|receitas)\s*$", norm(message))
     if footer:
         section = "income" if footer.group(1) == "receitas" else "expense"
-    lines = re.split(r"\r?\n|;(?!\s*minha parte\b)", message, flags=re.I)
-    for raw in lines:
+    lines = []
+    for message_line in message.splitlines():
+        parts = re.split(r"\s*[|;]\s*(?:detalhes|descri[cç][aã]o|observa[cç][aã]o|obs)\s*:\s*", message_line, maxsplit=1, flags=re.I)
+        segments = re.split(r";(?!\s*minha parte\b)", parts[0], flags=re.I)
+        lines.extend((segment, parts[1].strip() if len(parts) > 1 and i == len(segments) - 1 else None)
+                     for i, segment in enumerate(segments))
+    for raw, notes in lines:
         line = raw.strip().strip("*").strip()
+        if notes and len(notes) > 2000:
+            unresolved.append(line + " (a descrição deve ter até 2000 caracteres)")
+            continue
         if not line:
             continue
         line = re.sub(r"^\s*(?:[-•]\s*|\d+[.)]\s+)", "", line).replace("**", "")
@@ -392,7 +401,7 @@ def interpret(message, today):
                           day=day.isoformat() if day else None, months=months if is_monthly else None,
                           category=category(name, kind), account=account if kind == "income" else "Cartão do pai" if father_card and payer != "self" else None,
                           payer_name=payer_name, until=until.isoformat() if until else None,
-                          installments=installment_count, personal_cents=personal, goal=goal))
+                          installments=installment_count, personal_cents=personal, goal=goal, notes=notes))
     return items, unresolved
 
 

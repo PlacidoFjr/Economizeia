@@ -26,6 +26,7 @@ class QuickEntry(BaseModel):
     name: str = Field(min_length=1, max_length=180)
     amount_cents: int = Field(gt=0, le=10_000_000_000, strict=True)
     day: date
+    notes: str | None = Field(default=None, max_length=2000)
 
 
 class ChatMessage(BaseModel):
