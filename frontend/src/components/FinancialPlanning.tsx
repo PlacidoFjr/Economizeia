@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import { Link } from 'react-router-dom'
 import api from '../services/api'
 import type { SpendingCategory } from './MonthlySpending'
 import FinancialPlanManager from './FinancialPlanManager'
@@ -7,7 +8,7 @@ import FinancialPlanManager from './FinancialPlanManager'
 type Item = { id: string; name: string; amount_cents: number; kind: 'income' | 'expense' | 'budget' | 'reserve'; payer: string; payer_name?: string; shared?: boolean; frequency: string; month: string; day?: string; months?: number; occurrence_count?: number }
 export type FinancialActivityRow = { id: string; name: string; amount_cents: number; day: string; type: 'expense' | 'income'; status: string; category?: string }
 type FinancialActivity = { categories: Record<string, number>; issuers: Record<string, number>; trend: { month: string; income: number; expense: number }[]; open_count: number; overdue_count: number; upcoming: FinancialActivityRow[]; planned_due?: FinancialActivityRow[]; recent: FinancialActivityRow[] }
-type Overview = { spending?: SpendingCategory[]; month: string; actual: { income: number; expense: number; third: number; balance: number; pending: number }; planned: { income: number; expense: number; third: number; budget: number; reserve: number; available: number; cost_of_living: number }; items: Item[]; activity?: FinancialActivity }
+type Overview = { spending?: SpendingCategory[]; month: string; reserve_total?: number; actual: { reserve?: number; income: number; expense: number; third: number; balance: number; pending: number }; planned: { income: number; expense: number; third: number; budget: number; reserve: number; available: number; cost_of_living: number }; items: Item[]; activity?: FinancialActivity }
 export const financialMoney = (cents: number) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const money = financialMoney
 const label = (month: string) => new Date(month + '-01T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
@@ -18,7 +19,8 @@ const groups = [
   { title: 'Despesas previstas de terceiros', test: (i: Item) => i.kind === 'expense' && i.payer === 'third' && i.frequency !== 'actual' },
   { title: 'Despesas pagas por terceiros', test: (i: Item) => i.frequency === 'actual' && i.payer === 'third' },
   { title: 'Limites de orçamento', test: (i: Item) => i.kind === 'budget' },
-  { title: 'Metas de reserva', test: (i: Item) => i.kind === 'reserve' },
+  { title: 'Metas de reserva', test: (i: Item) => i.kind === 'reserve' && i.frequency !== 'actual' },
+  { title: 'Reservas guardadas', test: (i: Item) => i.kind === 'reserve' && i.frequency === 'actual' },
   { title: 'Despesas compartilhadas previstas', test: (i: Item) => i.kind === 'expense' && i.payer === 'shared' && i.frequency !== 'actual' },
 ]
 export function useFinancialOverview(month: Date) {
@@ -38,17 +40,20 @@ export default function FinancialPlanning({ month, mode = 'all' }: { month: Date
   if (isError || !data) return <section className={card}><p>Não foi possível carregar o planejamento.</p><button onClick={() => refetch()} className="mt-2 underline">Tentar novamente</button></section>
   const p = data.planned
   const a = data.actual
-  const visible = groups.filter((_, i) => mode === 'all' || (mode === 'expenses' && ((i >= 1 && i <= 3) || i === 6)) || (mode === 'reserve' && i === 5))
+  const visible = groups.filter((_, i) => mode === 'all' || (mode === 'expenses' && ((i >= 1 && i <= 3) || i === 7)) || (mode === 'reserve' && (i === 5 || i === 6)))
   const metrics = mode === 'all' ? [
     ['Receita prevista', p.income], ['Despesas próprias previstas', p.expense], ['Despesas previstas de terceiros', p.third],
     ['Limite de orçamento', p.budget], ['Meta de reserva', p.reserve], ['Disponível planejado', p.available],
     ['Custo de vida previsto', p.cost_of_living],
-    ['Resultado próprio realizado', a.balance], ['Receitas recebidas', a.income], ['Despesas próprias pagas', a.expense], ['Terceiros já pagos', a.third], ['Contas próprias em aberto', a.pending],
+    ['Resultado próprio realizado', a.balance], ['Receitas recebidas', a.income], ['Despesas próprias pagas', a.expense], ['Terceiros já pagos', a.third], ['Contas próprias em aberto', a.pending], ['Guardado na reserva no mês', a.reserve ?? 0],
+  ] as [string, number][] : mode === 'reserve' ? [
+    ['Reserva planejada no mês', p.reserve], ['Guardado no mês', a.reserve ?? 0],
+    ['Falta reservar no mês', Math.max(0, p.reserve - (a.reserve ?? 0))], ['Total guardado na reserva', data.reserve_total ?? 0],
   ] as [string, number][] : []
   return <section className={card + ' space-y-4 text-slate-900 dark:text-slate-100'}>
-    <div><h2 className="text-lg font-bold">{mode === 'reserve' ? 'Reservas planejadas' : 'Planejamento financeiro'}</h2><p className="text-sm text-slate-500 dark:text-slate-400 capitalize">{label(data.month)}</p></div>
-    {mode === 'all' && <FinancialPlanManager />}
-    {mode === 'all' && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([name, amount]) => <div key={name} className="rounded-md border border-slate-200 p-3 dark:border-slate-700"><p className="text-xs text-slate-500 dark:text-slate-400">{name}</p><p className="mt-1 text-lg font-semibold tabular-nums break-words">{money(amount)}</p></div>)}</div>}
+    <div><h2 className="text-lg font-bold">{mode === 'reserve' ? 'Reservas' : 'Planejamento financeiro'}</h2><p className="text-sm text-slate-500 dark:text-slate-400 capitalize">{label(data.month)}</p></div>
+    {(mode === 'all' || mode === 'reserve') && <FinancialPlanManager />}
+    {metrics.length > 0 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([name, amount]) => <div key={name} className="rounded-md border border-slate-200 p-3 dark:border-slate-700"><p className="text-xs text-slate-500 dark:text-slate-400">{name}</p><p className="mt-1 text-lg font-semibold tabular-nums break-words">{money(amount)}</p></div>)}</div>}
     {mode === 'all' && <p className="text-xs text-slate-500 dark:text-slate-400">O disponível planejado considera receitas e despesas previstas, limites e reservas. Gastos de terceiros entram no custo de vida.</p>}
     {visible.map(g => {
       const items = data.items.filter(g.test)
@@ -60,7 +65,7 @@ export default function FinancialPlanning({ month, mode = 'all' }: { month: Date
             <div className="min-w-0">
               <p className="break-words">{item.name}</p>
               <p className="text-xs text-slate-500">
-                {frequencies[item.frequency]}
+                {item.kind === 'reserve' && item.frequency === 'actual' ? 'Guardado' : frequencies[item.frequency]}
                 {item.day && ' · ' + item.day.split('-').reverse().join('/')}
                 {item.months && ' · ' + item.months + ' meses'}
                 {item.payer_name && ' · ' + item.payer_name}
@@ -73,5 +78,25 @@ export default function FinancialPlanning({ month, mode = 'all' }: { month: Date
       </details>
     })}
     {!data.items.some(i => visible.some(g => g.test(i))) && <p className="text-sm text-slate-500">Nenhum item de planejamento para este mês. Cadastre e confirme pelo chat.</p>}
+  </section>
+}
+
+export function ReserveSummary({ month }: { month: Date }) {
+  const { data } = useFinancialOverview(month)
+  if (!data || (!data.planned.reserve && !data.actual.reserve && !data.reserve_total)) return null
+  return <section className={card + ' text-slate-950 dark:text-slate-100'}>
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h2 className="text-base font-semibold">Reserva do mês</h2>
+      <Link to="/app/savings-goals" className="text-sm font-semibold text-teal-800 underline dark:text-teal-200">Ver reservas e metas</Link>
+    </div>
+    <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {[
+        ['Planejado', data.planned.reserve], ['Guardado', data.actual.reserve ?? 0],
+        ['Falta reservar', Math.max(0, data.planned.reserve - (data.actual.reserve ?? 0))],
+      ].map(([label, amount]) => <div key={label}>
+        <dt className="text-sm text-slate-500">{label}</dt>
+        <dd className="mt-1 text-lg font-semibold tabular-nums">{money(Number(amount))}</dd>
+      </div>)}
+    </dl>
   </section>
 }

@@ -28,7 +28,7 @@ type Plan = {
 type Edit = Omit<Plan, 'id'>
 
 const kinds: Record<Kind, string> = { income: 'Receita prevista', expense: 'Despesa', budget: 'Limite de orçamento', reserve: 'Meta de reserva' }
-const frequencies: Record<Frequency, string> = { once: 'Pontual', weekly: 'Semanal', monthly: 'Mensal', yearly: 'Anual', actual: 'Realizado' }
+const frequencies: Record<Frequency, string> = { once: 'Pontual', weekly: 'Semanal', monthly: 'Mensal', yearly: 'Anual', actual: 'Realizado / guardado' }
 const categories = ['alimentacao', 'moradia', 'servicos', 'transporte', 'saude', 'lazer', 'educacao', 'impostos', 'dividas', 'investimentos', 'outras']
 const extraCategories: Record<string, string> = { lazer: 'Lazer', educacao: 'Educação', impostos: 'Impostos', dividas: 'Dívidas' }
 const inputClass = 'mt-1 block min-h-10 w-full min-w-0 rounded-md border border-slate-300 bg-white px-2.5 py-2 text-sm dark:border-slate-600 dark:bg-slate-950'
@@ -69,7 +69,7 @@ function PlanForm({ item, busy, error, onCancel, onSave }: {
 
   const field = <K extends keyof Plan>(key: K, value: Plan[K]) => setForm(current => ({ ...current, [key]: value }))
   const recurring = ['weekly', 'monthly', 'yearly'].includes(form.frequency)
-  const canMarkActual = form.kind === 'expense' && form.payer === 'third'
+  const canMarkActual = (form.kind === 'expense' && form.payer === 'third') || form.kind === 'reserve'
   const categoryOptions = [...new Set([...categories, form.category || 'outras'])]
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -106,7 +106,7 @@ function PlanForm({ item, busy, error, onCancel, onSave }: {
           <select className={inputClass} value={form.kind} onChange={e => {
             const kind = e.target.value as Kind
             setForm(current => ({ ...current, kind, payer: kind === 'expense' ? current.payer : 'self',
-              frequency: kind !== 'expense' && current.frequency === 'actual' ? 'once' : current.frequency }))
+              frequency: !['expense', 'reserve'].includes(kind) && current.frequency === 'actual' ? 'once' : current.frequency }))
           }}>
             {Object.entries(kinds).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
           </select>
@@ -124,7 +124,7 @@ function PlanForm({ item, busy, error, onCancel, onSave }: {
             setForm(current => ({ ...current, month, day: current.day?.startsWith(month + '-') ? current.day : null }))
           }} />
         </label>
-        <label>{form.frequency === 'actual' ? 'Data do pagamento' : 'Primeira data ou vencimento'}
+        <label>{form.frequency === 'actual' ? 'Data do pagamento ou reserva' : 'Primeira data ou vencimento'}
           <input type="date" required={form.frequency === 'weekly' || form.frequency === 'actual'} className={inputClass} value={form.day || ''} onChange={e => {
             const day = e.target.value
             setForm(current => ({ ...current, day, month: day ? day.slice(0, 7) : current.month }))

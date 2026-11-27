@@ -6,7 +6,7 @@ import { ptBR } from 'date-fns/locale'
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, ChevronDown, Plus, WalletCards } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import FinancialPlanning, { financialMoney as money, useFinancialOverview } from '../components/FinancialPlanning'
+import FinancialPlanning, { financialMoney as money, useFinancialOverview, ReserveSummary } from '../components/FinancialPlanning'
 import type { FinancialActivityRow } from '../components/FinancialPlanning'
 import LoadingSpinner from '../components/LoadingSpinner'
 import MonthSelector from '../components/MonthSelector'
@@ -165,6 +165,7 @@ export default function Dashboard() {
           </section>
 
           <MonthlySpending month={selectedMonth} />
+          <ReserveSummary month={selectedMonth} />
 
           {activity && activity.overdue_count > 0 && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-100">
