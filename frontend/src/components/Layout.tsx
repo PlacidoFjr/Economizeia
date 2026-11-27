@@ -5,6 +5,7 @@ import { motion } from 'motion/react'
 import { Calendar, CreditCard, Users, DollarSign, Home, LogOut, Menu, Target, TrendingUp, Upload, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import ThemeToggle from './ThemeToggle'
+import InstallApp from './InstallApp'
 
 const Chatbot = lazy(() => import('./Chatbot'))
 
@@ -46,7 +47,7 @@ export default function Layout() {
         <Chatbot />
       </Suspense>
 
-      <nav className="sticky top-0 z-50 border-b border-slate-200 bg-white/92 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
+      <nav style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }} className="sticky top-0 z-50 border-b border-slate-200 bg-white/92 shadow-sm backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/92">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 justify-between">
             <div className="flex items-center">
@@ -79,6 +80,7 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-2">
+              <InstallApp />
               <ThemeToggle />
               <button
                 onClick={() => void handleLogout()}
@@ -148,7 +150,7 @@ export default function Layout() {
         <Outlet />
       </motion.main>
 
-      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/94 px-2 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl md:hidden dark:border-slate-800 dark:bg-slate-950/94">
+      <div style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }} className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/94 px-2 py-2 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl md:hidden dark:border-slate-800 dark:bg-slate-950/94">
         <div className="mx-auto grid max-w-lg grid-cols-5 gap-1">
           {bottomItems.map((item) => {
             const Icon = item.icon
