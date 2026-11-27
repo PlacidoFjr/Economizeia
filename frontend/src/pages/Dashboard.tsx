@@ -148,7 +148,7 @@ export default function Dashboard() {
             <div className="bg-[#123b3a] p-5 text-white sm:p-6">
               <p className="flex items-center gap-2 text-sm font-medium text-teal-100"><WalletCards size={17} aria-hidden="true" /> Saldo realizado no mês</p>
               <p className="mt-3 break-words text-3xl font-bold tracking-tight tabular-nums sm:text-4xl">{money(data.actual.balance)}</p>
-              <p className="mt-2 text-sm text-teal-100">Receitas recebidas menos despesas próprias</p>
+              <p className="mt-2 text-sm text-teal-100">Receitas recebidas menos saídas, incluindo a reserva guardada</p>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-4 p-5 md:grid-cols-3 sm:p-6">
               {[

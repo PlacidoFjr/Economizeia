@@ -33,6 +33,7 @@ export const translateCategory = (category: string): string => {
     'transporte': 'Transporte',
     'saude': 'Saúde',
     'investimentos': 'Investimentos',
+    'reserva': 'Reserva',
     'outras': 'Outras',
   }
   return translations[category] || category
