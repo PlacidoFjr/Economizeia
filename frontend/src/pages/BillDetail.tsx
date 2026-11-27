@@ -4,6 +4,7 @@ import api from '../services/api'
 import { useState } from 'react'
 import { Check, X, Calendar, DollarSign, ArrowLeft, FileText, Image as ImageIcon } from 'lucide-react'
 import { translateStatus } from '../utils/translations'
+import TransactionDescription from '../components/TransactionDescription'
 
 export default function BillDetail() {
   const { id } = useParams()
@@ -142,6 +143,7 @@ export default function BillDetail() {
           </div>
         </div>
 
+        <TransactionDescription id={bill.id} name={bill.issuer || 'Lançamento'} notes={bill.notes} />
         {/* Imagem do Boleto */}
         {bill.image_url && !bill.image_url.startsWith('#') && (
           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">

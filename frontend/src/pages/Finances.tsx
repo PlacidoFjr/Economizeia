@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import EmptyState from '../components/EmptyState'
 import ConfirmDialog from '../components/ConfirmDialog'
 import MonthSelector from '../components/MonthSelector'
+import TransactionDescription from '../components/TransactionDescription'
 
 const CATEGORIES = [
   { value: '', label: 'Todas as categorias' },
@@ -315,6 +316,7 @@ export default function Finances() {
                         <div className="text-sm font-medium text-gray-900">
                           {item.issuer || 'Desconhecido'}
                         </div>
+                        <TransactionDescription id={item.id} name={item.issuer || 'Lançamento'} notes={item.notes} />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`text-sm font-semibold ${
@@ -382,6 +384,7 @@ export default function Finances() {
                         {item.issuer || 'Desconhecido'}
                       </h3>
                     </div>
+                    <TransactionDescription id={item.id} name={item.issuer || 'Lançamento'} notes={item.notes} />
                     <p className={`text-lg font-bold mb-1 ${
                       item.type === 'income' ? 'text-green-700' : 'text-red-700'
                     }`}>

@@ -362,17 +362,18 @@ export default function AddExpense() {
         {/* Observações */}
         <div>
           <label htmlFor="notes" className="block text-sm font-semibold text-gray-700 mb-2">
-            {formData.type === 'income' ? 'Observações sobre a Receita' : 'Observações'}
+            {formData.type === 'income' ? 'Observações sobre a Receita' : 'Detalhes da compra (opcional)'}
           </label>
           <textarea
             id="notes"
+            maxLength={2000}
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             rows={3}
             className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
             placeholder={formData.type === 'income' 
               ? 'Adicione observações sobre esta receita...' 
-              : 'Adicione observações sobre esta despesa...'}
+              : 'Ex. café, pão e produtos de limpeza para casa'}
           />
         </div>
 
